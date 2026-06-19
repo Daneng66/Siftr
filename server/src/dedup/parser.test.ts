@@ -1,53 +1,59 @@
 import { describe, it, expect } from "vitest";
-import { parseCzkawkaGroups } from "./parser";
+import { parseDuplicatesJson, parseImagesJson } from "./parser";
 
-describe("parseCzkawkaGroups", () => {
-  it("parses duplicate-style groups (bare paths)", () => {
-    const text = [
-      "-------------------------------------------------Files with same hashes",
-      "Found 4 duplicated files in 2 groups",
-      "",
-      "---- Size 1024 (1024) - 2 files",
-      "/data/photos/a.jpg",
-      "/data/photos/b.jpg",
-      "",
-      "---- Size 2048 (2048) - 2 files",
-      "/data/photos/c.jpg",
-      "/data/photos/d.jpg",
-      "",
-    ].join("\n");
-    const groups = parseCzkawkaGroups(text);
+describe("parseDuplicatesJson", () => {
+  it("parses the size-keyed dup compact JSON (real czkawka 7 shape)", () => {
+    const json = JSON.stringify({
+      "16144": [
+        [
+          { path: "/data/photos/original.jpg", size: 16144, hash: "abc" },
+          { path: "/data/photos/original_copy1.jpg", size: 16144, hash: "abc" },
+          { path: "/data/photos/original_copy2.jpg", size: 16144, hash: "abc" },
+        ],
+      ],
+      "2048": [
+        [
+          { path: "/data/photos/a.png", size: 2048, hash: "def" },
+          { path: "/data/photos/b.png", size: 2048, hash: "def" },
+        ],
+      ],
+    });
+    const groups = parseDuplicatesJson(json);
     expect(groups).toHaveLength(2);
-    expect(groups[0].members.map((m) => m.path)).toEqual([
-      "/data/photos/a.jpg",
-      "/data/photos/b.jpg",
+    const paths = groups.map((g) => g.members.map((m) => m.path));
+    expect(paths).toContainEqual([
+      "/data/photos/original.jpg",
+      "/data/photos/original_copy1.jpg",
+      "/data/photos/original_copy2.jpg",
     ]);
+    expect(paths).toContainEqual(["/data/photos/a.png", "/data/photos/b.png"]);
   });
 
-  it("parses similar-image groups and captures similarity", () => {
-    const text = [
-      "-------------------------------------------------Similar pictures",
-      "Found 3 images which have similar friends",
-      "",
-      "/data/photos/x.jpg - 1920x1080 - 500.00 KiB - Original",
-      "/data/photos/y.jpg - 1920x1080 - 480.00 KiB - Very High",
-      "",
-    ].join("\n");
-    const groups = parseCzkawkaGroups(text);
+  it("returns [] for empty output or no duplicates", () => {
+    expect(parseDuplicatesJson("")).toEqual([]);
+    expect(parseDuplicatesJson("{}")).toEqual([]);
+    expect(parseDuplicatesJson("not json")).toEqual([]);
+  });
+});
+
+describe("parseImagesJson", () => {
+  it("parses the flat array image JSON and captures similarity", () => {
+    const json = JSON.stringify([
+      [
+        { path: "/data/photos/x.jpg", similarity: "Original" },
+        { path: "/data/photos/y.jpg", similarity: "VeryHigh" },
+      ],
+    ]);
+    const groups = parseImagesJson(json);
     expect(groups).toHaveLength(1);
     expect(groups[0].members[0].path).toBe("/data/photos/x.jpg");
-    expect(groups[0].members[1].similarity).toBe("Very High");
+    expect(groups[0].members[1].similarity).toBe("VeryHigh");
   });
 
-  it("ignores singleton and empty results", () => {
-    expect(parseCzkawkaGroups("")).toEqual([]);
-    expect(parseCzkawkaGroups("/data/photos/only.jpg\n")).toEqual([]);
-  });
-
-  it("handles Windows drive paths", () => {
-    const text = "C:\\photos\\a.jpg\nC:\\photos\\b.jpg\n";
-    const groups = parseCzkawkaGroups(text);
-    expect(groups).toHaveLength(1);
-    expect(groups[0].members).toHaveLength(2);
+  it("ignores empty results and singletons", () => {
+    expect(parseImagesJson("[]")).toEqual([]);
+    expect(parseImagesJson(JSON.stringify([[{ path: "/only.jpg" }]]))).toEqual(
+      []
+    );
   });
 });

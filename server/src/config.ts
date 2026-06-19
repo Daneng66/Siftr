@@ -24,6 +24,15 @@ export const config = {
   czkawkaBin: process.env.CZKAWKA_BIN ?? "czkawka_cli",
   exiftoolBin: process.env.EXIFTOOL_BIN ?? "exiftool",
 
+  /** czkawka similarity preset for near-duplicate images (Minimal..VeryHigh). */
+  czkawkaImagePreset: process.env.CZKAWKA_IMAGE_PRESET ?? "High",
+
+  /**
+   * Whether to also run czkawka's similar-image (perceptual) pass. Off for now —
+   * dedup focuses on exact hash-based duplicates. Set DEDUP_SIMILAR=true to enable.
+   */
+  dedupSimilarEnabled: process.env.DEDUP_SIMILAR === "true",
+
   /** How many photos to hash/thumbnail in parallel during a scan. */
   scanConcurrency: Number(process.env.SCAN_CONCURRENCY ?? 4),
   thumbSize: Number(process.env.THUMB_SIZE ?? 256),

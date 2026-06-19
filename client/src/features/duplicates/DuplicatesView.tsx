@@ -11,8 +11,6 @@ import { CheckIcon, CopyIcon, ScanIcon, TrashIcon } from "../../components/ui/ic
 import type { DuplicateGroup, DupStatus } from "../../lib/types";
 import { clsx } from "clsx";
 
-type Kind = "all" | "exact" | "similar";
-
 function GroupCard({ group }: { group: DuplicateGroup }) {
   const invalidate = useInvalidateLibrary();
   // Local status map seeded from the server, edited optimistically.
@@ -160,10 +158,7 @@ function GroupCard({ group }: { group: DuplicateGroup }) {
 }
 
 export function DuplicatesView() {
-  const [kind, setKind] = useState<Kind>("all");
-  const { data, refetch, isLoading } = useDuplicates(
-    kind === "all" ? undefined : kind
-  );
+  const { data, refetch, isLoading } = useDuplicates();
   const { data: jobsData } = useJobs(true);
   const dedupRunning = jobsData?.dedupRunning ?? false;
 
@@ -174,6 +169,7 @@ export function DuplicatesView() {
   }, [dedupRunning]);
 
   const groups = data?.groups ?? [];
+  const latestDedup = jobsData?.jobs.find((j) => j.type === "dedup");
 
   return (
     <div className="scroll-area h-full overflow-y-auto p-5">
@@ -181,8 +177,8 @@ export function DuplicatesView() {
         <div>
           <h1 className="text-xl font-bold">Duplicates</h1>
           <p className="text-sm text-slate-500">
-            Exact (hash) and near-duplicate (similar image) groups found by
-            czkawka. Pick which copy to keep.
+            Exact (hash-based) duplicate groups found by czkawka. Pick which copy
+            to keep.
           </p>
         </div>
         <Button
@@ -195,22 +191,25 @@ export function DuplicatesView() {
         </Button>
       </div>
 
-      <div className="mb-4 flex gap-1.5">
-        {(["all", "exact", "similar"] as Kind[]).map((k) => (
-          <button
-            key={k}
-            onClick={() => setKind(k)}
-            className={clsx(
-              "rounded-lg px-3 py-1.5 text-sm font-medium capitalize",
-              kind === k
-                ? "bg-brand-600 text-white"
-                : "bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300"
-            )}
-          >
-            {k}
-          </button>
-        ))}
-      </div>
+      {/* Surface scan status/failures so the button never silently "does nothing". */}
+      {dedupRunning && (
+        <div className="mb-4 rounded-lg bg-brand-50 px-4 py-2.5 text-sm text-brand-700 dark:bg-brand-900/30 dark:text-brand-200">
+          Scanning for duplicates… {latestDedup?.message || ""}
+        </div>
+      )}
+      {!dedupRunning && latestDedup?.status === "failed" && (
+        <div className="mb-4 rounded-lg bg-red-50 px-4 py-2.5 text-sm text-red-700 dark:bg-red-900/30 dark:text-red-300">
+          <span className="font-medium">Duplicate scan failed:</span>{" "}
+          {latestDedup.error || "unknown error"}
+        </div>
+      )}
+      {!dedupRunning &&
+        latestDedup?.status === "completed" &&
+        groups.length === 0 && (
+          <div className="mb-4 rounded-lg bg-emerald-50 px-4 py-2.5 text-sm text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
+            Scan complete — no duplicate groups found.
+          </div>
+        )}
 
       {isLoading ? (
         <p className="text-slate-400">Loading…</p>
@@ -219,7 +218,7 @@ export function DuplicatesView() {
           <CopyIcon className="mx-auto mb-2 text-3xl text-slate-300" />
           <p className="font-medium">No duplicate groups</p>
           <p className="text-sm text-slate-500">
-            Run a duplicate scan to find exact and similar photos.
+            Run a duplicate scan to find exact (hash-based) duplicate photos.
           </p>
         </div>
       ) : (

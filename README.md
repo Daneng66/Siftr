@@ -11,9 +11,10 @@ container** — React frontend, Node/Express API, SQLite index, and the
 - **Library browser** — fast, virtualized photo grid that stays smooth at
   1,000–10,000 photos. Hover quick-actions (favorite / download / select) and
   corner badges (duplicate indicator, file size, tag count).
-- **Deduplication** — `czkawka_cli` finds exact (hash) and near-duplicate
-  (similar image) groups. Compare copies side-by-side and pick which to keep;
-  deletions move to a reversible `.trash`.
+- **Deduplication** — `czkawka_cli` finds exact (hash-based) duplicate groups.
+  Compare copies side-by-side and pick which to keep; deletions move to a
+  reversible `.trash`. (A perceptual "similar images" pass is also wired up,
+  behind `DEDUP_SIMILAR=true`; off by default for now.)
 - **Bulk rename** — pattern tokens (`{date:…}`, `{seq:N}`, `{original}`,
   `{camera}`, `{custom}`) with a live preview and collision detection.
 - **Metadata editing** — view and edit EXIF (date, GPS, camera) individually or

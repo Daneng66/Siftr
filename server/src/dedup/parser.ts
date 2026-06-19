@@ -1,11 +1,11 @@
 /**
- * Parser for czkawka_cli text result files (pure — unit tested).
+ * Parsers for czkawka_cli **compact JSON** output (`-C` flag), unit-tested.
  *
- * czkawka writes groups separated by blank lines. We tolerate both the duplicate
- * format (one bare path per line) and the similar-images format
- * (`PATH - WxH - SIZE - SIMILARITY`). Header/summary lines are skipped. Any line
- * whose first " - "-delimited segment looks like an absolute path is treated as a
- * group member; blank lines (or header lines) break groups.
+ * We use JSON rather than the formatted text file because the text format quotes
+ * paths and varies across versions, whereas the JSON shape is stable:
+ *
+ *   duplicates (`dup -C`):  { "<size>": [ [ {path,size,hash,...}, ... ], ... ] }
+ *   images     (`image -C`): [ [ {path,similarity,...}, ... ], ... ]
  */
 export interface ParsedMember {
   path: string;
@@ -16,47 +16,64 @@ export interface ParsedGroup {
   members: ParsedMember[];
 }
 
-const HEADER_RE = /^(-{3,}|Found |Searching|Results|Total|Number|Mode|Stopped)/i;
-
-function looksLikePath(s: string): boolean {
-  // Absolute Unix path, or Windows drive path (parser is cross-platform safe).
-  return /^\//.test(s) || /^[A-Za-z]:[\\/]/.test(s);
+interface CzkawkaFile {
+  path?: string;
+  similarity?: unknown;
 }
 
-export function parseCzkawkaGroups(text: string): ParsedGroup[] {
-  const lines = text.split(/\r?\n/);
-  const groups: ParsedGroup[] = [];
-  let current: ParsedMember[] = [];
-
-  const flush = () => {
-    if (current.length >= 2) groups.push({ members: current });
-    current = [];
-  };
-
-  for (const raw of lines) {
-    const line = raw.trimEnd();
-    if (line.trim() === "") {
-      flush();
-      continue;
+function toMembers(group: unknown): ParsedMember[] {
+  if (!Array.isArray(group)) return [];
+  const members: ParsedMember[] = [];
+  for (const file of group as CzkawkaFile[]) {
+    if (file && typeof file.path === "string") {
+      members.push({
+        path: file.path,
+        similarity:
+          file.similarity != null ? String(file.similarity) : undefined,
+      });
     }
-    if (HEADER_RE.test(line.trim())) {
-      // A header generally introduces a new group/section.
-      flush();
-      continue;
-    }
-    // Split on " - " — duplicates have no such separator (whole line is the path),
-    // similar images put metadata after it.
-    const segments = line.split(" - ");
-    const path = segments[0].trim();
-    if (!looksLikePath(path)) {
-      // Unexpected non-path content ends the current group.
-      flush();
-      continue;
-    }
-    const similarity =
-      segments.length >= 4 ? segments[segments.length - 1].trim() : undefined;
-    current.push({ path, similarity });
   }
-  flush();
+  return members;
+}
+
+/** Parse `dup -C` output: an object keyed by file size, each an array of groups. */
+export function parseDuplicatesJson(text: string): ParsedGroup[] {
+  if (!text.trim()) return [];
+  let data: unknown;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    return [];
+  }
+  const groups: ParsedGroup[] = [];
+  // Object keyed by size -> array of groups. (Tolerate a bare array too.)
+  const buckets = Array.isArray(data)
+    ? (data as unknown[])
+    : Object.values(data as Record<string, unknown>);
+  for (const bucket of buckets) {
+    if (!Array.isArray(bucket)) continue;
+    for (const group of bucket) {
+      const members = toMembers(group);
+      if (members.length >= 2) groups.push({ members });
+    }
+  }
+  return groups;
+}
+
+/** Parse `image -C` output: a flat array of groups. */
+export function parseImagesJson(text: string): ParsedGroup[] {
+  if (!text.trim()) return [];
+  let data: unknown;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(data)) return [];
+  const groups: ParsedGroup[] = [];
+  for (const group of data) {
+    const members = toMembers(group);
+    if (members.length >= 2) groups.push({ members });
+  }
   return groups;
 }

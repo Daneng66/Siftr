@@ -98,6 +98,13 @@ export function TopNav() {
               `${activeJob.type}… ${activeJob.progress}/${activeJob.total}`}
           </span>
         )}
+        <button
+          onClick={toggleTheme}
+          className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+          aria-label="Toggle theme"
+        >
+          {theme === "dark" ? <SunIcon className="text-lg" /> : <MoonIcon className="text-lg" />}
+        </button>
         <Button
           variant="primary"
           disabled={scanRunning}
@@ -106,16 +113,6 @@ export function TopNav() {
           <ScanIcon className={scanRunning ? "animate-spin" : ""} />
           {scanRunning ? "Scanning…" : "Scan"}
         </Button>
-        <button
-          onClick={toggleTheme}
-          className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
-          aria-label="Toggle theme"
-        >
-          {theme === "dark" ? <SunIcon className="text-lg" /> : <MoonIcon className="text-lg" />}
-        </button>
-        <div className="ml-1 flex h-8 w-8 items-center justify-center rounded-full bg-slate-200 text-sm font-semibold text-slate-600 dark:bg-slate-700 dark:text-slate-200">
-          You
-        </div>
       </div>
     </header>
   );

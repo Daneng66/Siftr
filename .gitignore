@@ -4,7 +4,11 @@ dist/
 .DS_Store
 data/
 .localdata/
+.dockerdata/
 !server/src
 .env
 .env.local
 coverage/
+
+# Claude Code local settings
+.claude/settings.local.json

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useUi } from "../../store/ui";
-import { useInfinitePhotos, useInvalidateLibrary } from "../../hooks/queries";
+import { useInfinitePhotos } from "../../hooks/queries";
 import { useSelection } from "../../store/selection";
 import { PhotoGrid } from "../../components/grid/PhotoGrid";
 import { BulkActionBar } from "../../components/BulkActionBar";
@@ -8,7 +8,6 @@ import { RenameModal } from "../rename/RenameModal";
 import { MetadataModal } from "../metadata/MetadataModal";
 import { TagModal } from "../organize/TagModal";
 import { OrganizeModal } from "../organize/OrganizeModal";
-import { api } from "../../lib/api";
 import type { FilterState } from "../../lib/types";
 import { ImagesIcon } from "../../components/ui/icons";
 
@@ -23,8 +22,6 @@ const SORTS: { value: string; label: string }[] = [
 
 function filterTitle(f: FilterState): string {
   switch (f.kind) {
-    case "favorites":
-      return "Favorites";
     case "unfiled":
       return "Unfiled";
     case "duplicates":
@@ -43,7 +40,6 @@ type ModalKind = "tag" | "rename" | "metadata" | "organize" | null;
 export function LibraryView() {
   const { filter, sort, setSort, search } = useUi();
   const selection = useSelection();
-  const invalidate = useInvalidateLibrary();
   const [modal, setModal] = useState<ModalKind>(null);
 
   const query = useInfinitePhotos(filter, sort, search);
@@ -53,13 +49,6 @@ export function LibraryView() {
   );
   const total = query.data?.pages[0]?.total ?? 0;
   const selectedIds = selection.ids();
-
-  const favoriteSelected = async () => {
-    await Promise.all(
-      selectedIds.map((id) => api.toggleFavorite(id, true).catch(() => {}))
-    );
-    invalidate();
-  };
 
   return (
     <div className="flex h-full flex-col">
@@ -117,7 +106,6 @@ export function LibraryView() {
 
       <BulkActionBar
         count={selection.count()}
-        onFavorite={favoriteSelected}
         onTag={() => setModal("tag")}
         onRename={() => setModal("rename")}
         onMetadata={() => setModal("metadata")}

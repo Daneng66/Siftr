@@ -1,6 +1,6 @@
 /**
  * SQLite schema. Applied idempotently at startup. SQLite is the metadata index
- * plus all virtual organization (folders, tags, duplicate groups, favorites);
+ * plus all virtual organization (folders, tags, duplicate groups);
  * the files on disk remain the source of truth for existence and bytes.
  */
 export const SCHEMA_SQL = `
@@ -31,7 +31,6 @@ CREATE TABLE IF NOT EXISTS photos (
   date_imported     TEXT NOT NULL DEFAULT (datetime('now')),
   date_modified     TEXT,
   thumbnail_path    TEXT,
-  is_favorite       INTEGER NOT NULL DEFAULT 0,
   folder_id         INTEGER REFERENCES folders(id) ON DELETE SET NULL,
   mtime_ms          INTEGER NOT NULL DEFAULT 0,
   size_seen         INTEGER NOT NULL DEFAULT 0
@@ -40,7 +39,6 @@ CREATE INDEX IF NOT EXISTS idx_photos_file_hash ON photos(file_hash);
 CREATE INDEX IF NOT EXISTS idx_photos_phash ON photos(perceptual_hash);
 CREATE INDEX IF NOT EXISTS idx_photos_folder ON photos(folder_id);
 CREATE INDEX IF NOT EXISTS idx_photos_date_taken ON photos(exif_date_taken);
-CREATE INDEX IF NOT EXISTS idx_photos_favorite ON photos(is_favorite);
 
 CREATE TABLE IF NOT EXISTS tags (
   id   INTEGER PRIMARY KEY AUTOINCREMENT,

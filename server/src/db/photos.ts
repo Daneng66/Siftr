@@ -19,7 +19,6 @@ export interface PhotoRow {
   date_imported: string;
   date_modified: string | null;
   thumbnail_path: string | null;
-  is_favorite: number;
   folder_id: number | null;
   mtime_ms: number;
   size_seen: number;

@@ -28,6 +28,26 @@ class JobManager {
     return this.active.has(type);
   }
 
+  /**
+   * Mark any jobs left in the DB as `running` as failed. On a fresh boot the
+   * in-memory `active` map is empty, so such rows are orphans from a process
+   * that died/restarted mid-job and can never be finished. Call once at startup
+   * before kicking off new work, otherwise they show as perpetually "running"
+   * in the UI.
+   */
+  reconcileOnStartup(): number {
+    const info = getDb()
+      .prepare(
+        `UPDATE jobs
+            SET status = 'failed',
+                error = 'interrupted by server restart',
+                updated_at = datetime('now')
+          WHERE status = 'running'`
+      )
+      .run();
+    return info.changes;
+  }
+
   create(type: JobType, message = ""): Job {
     const id = crypto.randomUUID();
     getDb()

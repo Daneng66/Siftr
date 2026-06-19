@@ -3,13 +3,7 @@ import { useFolders, useStats, useTags } from "../../hooks/queries";
 import { useUi } from "../../store/ui";
 import { formatBytes } from "../../lib/format";
 import type { FilterState, Folder } from "../../lib/types";
-import {
-  FolderIcon,
-  HeartIcon,
-  ImagesIcon,
-  CopyIcon,
-  TagIcon,
-} from "../ui/icons";
+import { FolderIcon, ImagesIcon, CopyIcon, TagIcon } from "../ui/icons";
 import { clsx } from "clsx";
 
 function StatRow({ label, value }: { label: string; value: string | number }) {
@@ -137,7 +131,6 @@ export function Sidebar() {
         <div className="space-y-1">
           <StatRow label="Photos" value={stats?.photos ?? 0} />
           <StatRow label="Total size" value={formatBytes(stats?.totalSize ?? 0)} />
-          <StatRow label="Favorites" value={stats?.favorites ?? 0} />
           <StatRow label="Duplicate groups" value={stats?.duplicateGroups ?? 0} />
         </div>
       </section>
@@ -153,13 +146,6 @@ export function Sidebar() {
             icon={<ImagesIcon />}
             label="All photos"
             count={stats?.photos}
-          />
-          <FilterButton
-            active={filtersEqual(filter, { kind: "favorites" })}
-            onClick={() => select({ kind: "favorites" })}
-            icon={<HeartIcon />}
-            label="Favorites"
-            count={stats?.favorites}
           />
           <FilterButton
             active={filtersEqual(filter, { kind: "unfiled" })}

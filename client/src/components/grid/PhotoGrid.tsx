@@ -3,8 +3,6 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import type { PhotoSummary } from "../../lib/types";
 import { PhotoCard } from "./PhotoCard";
 import { useSelection } from "../../store/selection";
-import { api } from "../../lib/api";
-import { useInvalidateLibrary } from "../../hooks/queries";
 import { useUi } from "../../store/ui";
 
 interface Props {
@@ -34,7 +32,6 @@ export function PhotoGrid({
   const [cols, setCols] = useState(4);
   const selection = useSelection();
   const setDetailPhotoId = useUi((s) => s.setDetailPhotoId);
-  const invalidate = useInvalidateLibrary();
 
   // Responsive column count from container width.
   useLayoutEffect(() => {
@@ -86,14 +83,6 @@ export function PhotoGrid({
     },
     // orderedIds derived from photos; selection is a stable store
     [photos] // eslint-disable-line react-hooks/exhaustive-deps
-  );
-
-  const toggleFavorite = useCallback(
-    async (id: number) => {
-      await api.toggleFavorite(id).catch(() => {});
-      invalidate();
-    },
-    [invalidate]
   );
 
   // ---- Marquee drag-select ----
@@ -198,7 +187,6 @@ export function PhotoGrid({
                   selected={selection.selected.has(photo.id)}
                   onClick={(e) => onCardClick(photo.id, e)}
                   onOpenDetail={() => setDetailPhotoId(photo.id)}
-                  onToggleFavorite={() => toggleFavorite(photo.id)}
                 />
               ))}
             </div>

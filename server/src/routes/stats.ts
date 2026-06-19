@@ -9,11 +9,6 @@ statsRouter.get("/", (_req, res) => {
   const photos = (db.prepare(`SELECT COUNT(*) AS n FROM photos`).get() as {
     n: number;
   }).n;
-  const favorites = (
-    db.prepare(`SELECT COUNT(*) AS n FROM photos WHERE is_favorite = 1`).get() as {
-      n: number;
-    }
-  ).n;
   const totalSize = (
     db.prepare(`SELECT COALESCE(SUM(file_size),0) AS n FROM photos`).get() as {
       n: number;
@@ -31,5 +26,5 @@ statsRouter.get("/", (_req, res) => {
     }
   ).n;
 
-  res.json({ photos, favorites, totalSize, folders, tags, duplicateGroups });
+  res.json({ photos, totalSize, folders, tags, duplicateGroups });
 });

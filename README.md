@@ -9,7 +9,7 @@ container** — React frontend, Node/Express API, SQLite index, and the
 ## Features
 
 - **Library browser** — fast, virtualized photo grid that stays smooth at
-  1,000–10,000 photos. Hover quick-actions (favorite / download / select) and
+  1,000–10,000 photos. Hover quick-actions (download / select) and
   corner badges (duplicate indicator, file size, tag count).
 - **Deduplication** — `czkawka_cli` finds exact (hash-based) duplicate groups.
   Compare copies side-by-side and pick which to keep; deletions move to a

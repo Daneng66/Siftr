@@ -9,7 +9,6 @@ export const photosRouter = Router();
 
 const listQuery = z.object({
   folderId: z.string().optional(), // number | "none"
-  favorite: z.coerce.boolean().optional(),
   tagId: z.coerce.number().optional(),
   duplicatesOnly: z.coerce.boolean().optional(),
   search: z.string().optional(),
@@ -48,7 +47,6 @@ photosRouter.get("/", (req, res) => {
     where.push("p.folder_id = @folderId");
     params.folderId = Number(q.folderId);
   }
-  if (q.favorite) where.push("p.is_favorite = 1");
   if (q.tagId !== undefined) {
     where.push(
       "EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id AND pt.tag_id = @tagId)"
@@ -77,7 +75,7 @@ photosRouter.get("/", (req, res) => {
   const items = db
     .prepare(
       `SELECT p.id, p.current_filename, p.file_size, p.width, p.height,
-              p.mime_type, p.exif_date_taken, p.thumbnail_path, p.is_favorite,
+              p.mime_type, p.exif_date_taken, p.thumbnail_path,
               p.folder_id,
               (SELECT COUNT(*) FROM photo_tags pt WHERE pt.photo_id = p.id) AS tag_count,
               (SELECT COUNT(*) FROM duplicate_group_members dm WHERE dm.photo_id = p.id) AS dup_count
@@ -131,21 +129,4 @@ photosRouter.get("/:id/raw", (req, res) => {
     );
   }
   res.sendFile(photo.path);
-});
-
-/** PATCH /api/photos/:id/favorite — toggle/set favorite flag. */
-photosRouter.patch("/:id/favorite", (req, res) => {
-  const id = Number(req.params.id);
-  const photo = getPhotoById(id);
-  if (!photo) return res.status(404).json({ error: "not found" });
-  const value =
-    typeof req.body?.favorite === "boolean"
-      ? req.body.favorite
-        ? 1
-        : 0
-      : photo.is_favorite
-      ? 0
-      : 1;
-  getDb().prepare(`UPDATE photos SET is_favorite = ? WHERE id = ?`).run(value, id);
-  res.json({ id, is_favorite: value });
 });

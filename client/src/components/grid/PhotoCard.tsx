@@ -3,29 +3,16 @@ import type { PhotoSummary } from "../../lib/types";
 import { api } from "../../lib/api";
 import { formatBytes } from "../../lib/format";
 import { clsx } from "clsx";
-import {
-  CheckIcon,
-  CopyIcon,
-  DownloadIcon,
-  HeartIcon,
-  TagIcon,
-} from "../ui/icons";
+import { CheckIcon, CopyIcon, DownloadIcon, TagIcon } from "../ui/icons";
 
 interface Props {
   photo: PhotoSummary;
   selected: boolean;
   onClick: (e: React.MouseEvent) => void;
   onOpenDetail: () => void;
-  onToggleFavorite: () => void;
 }
 
-function PhotoCardImpl({
-  photo,
-  selected,
-  onClick,
-  onOpenDetail,
-  onToggleFavorite,
-}: Props) {
+function PhotoCardImpl({ photo, selected, onClick, onOpenDetail }: Props) {
   return (
     <div
       data-photo-id={photo.id}
@@ -95,19 +82,6 @@ function PhotoCardImpl({
 
       {/* Hover quick actions */}
       <div className="absolute inset-x-0 top-0 flex justify-center gap-1.5 p-1.5 opacity-0 transition-opacity group-hover:opacity-100">
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggleFavorite();
-          }}
-          title="Favorite"
-          className={clsx(
-            "rounded-full bg-black/45 p-1.5 text-white backdrop-blur hover:bg-black/65",
-            photo.is_favorite && "text-rose-400"
-          )}
-        >
-          <HeartIcon filled={!!photo.is_favorite} className="text-sm" />
-        </button>
         <a
           href={api.rawUrl(photo.id, true)}
           onClick={(e) => e.stopPropagation()}

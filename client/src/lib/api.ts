@@ -31,7 +31,6 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
 
 export interface PhotoQuery {
   folderId?: string;
-  favorite?: boolean;
   tagId?: number;
   duplicatesOnly?: boolean;
   search?: string;
@@ -55,11 +54,6 @@ export const api = {
     );
   },
   getPhoto: (id: number) => request<PhotoDetail>(`/api/photos/${id}`),
-  toggleFavorite: (id: number, favorite?: boolean) =>
-    request<{ id: number; is_favorite: number }>(
-      `/api/photos/${id}/favorite`,
-      { method: "PATCH", body: JSON.stringify({ favorite }) }
-    ),
 
   stats: () => request<Stats>("/api/stats"),
   jobs: () => request<JobsResponse>("/api/jobs"),

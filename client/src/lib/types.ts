@@ -7,7 +7,6 @@ export interface PhotoSummary {
   mime_type: string | null;
   exif_date_taken: string | null;
   thumbnail_path: string | null;
-  is_favorite: number;
   folder_id: number | null;
   tag_count: number;
   dup_count: number;
@@ -42,7 +41,6 @@ export interface Tag {
 
 export interface Stats {
   photos: number;
-  favorites: number;
   totalSize: number;
   folders: number;
   tags: number;
@@ -98,7 +96,6 @@ export interface RenamePlanItem {
 
 export type FilterState =
   | { kind: "all" }
-  | { kind: "favorites" }
   | { kind: "unfiled" }
   | { kind: "duplicates" }
   | { kind: "folder"; id: number; name: string }

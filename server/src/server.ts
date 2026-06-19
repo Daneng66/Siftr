@@ -59,6 +59,11 @@ function main() {
   ensureDataDirs();
   getDb(); // open + migrate
 
+  // Fail any jobs left "running" by a previous process so the UI doesn't show
+  // a scan as perpetually in progress.
+  const orphaned = jobs.reconcileOnStartup();
+  if (orphaned > 0) console.log(`Marked ${orphaned} interrupted job(s) as failed`);
+
   const app = createApp();
   app.listen(config.port, () => {
     console.log(`Siftr listening on http://0.0.0.0:${config.port}`);

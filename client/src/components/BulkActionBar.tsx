@@ -1,7 +1,6 @@
 import { Button } from "./ui/Modal";
 import {
   FolderIcon,
-  HeartIcon,
   PencilIcon,
   TagIcon,
   TextIcon,
@@ -14,7 +13,6 @@ interface Props {
   onRename: () => void;
   onMetadata: () => void;
   onOrganize: () => void;
-  onFavorite: () => void;
   onClear: () => void;
 }
 
@@ -24,7 +22,6 @@ export function BulkActionBar({
   onRename,
   onMetadata,
   onOrganize,
-  onFavorite,
   onClear,
 }: Props) {
   if (count === 0) return null;
@@ -35,9 +32,6 @@ export function BulkActionBar({
           {count} selected
         </span>
         <div className="mx-0.5 h-6 w-px bg-slate-200 dark:bg-slate-700" />
-        <Button variant="ghost" onClick={onFavorite}>
-          <HeartIcon /> Favorite
-        </Button>
         <Button variant="ghost" onClick={onTag}>
           <TagIcon /> Tag
         </Button>

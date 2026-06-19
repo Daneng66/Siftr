@@ -1,0 +1,23 @@
+{
+  "name": "siftr",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Sift through your photo library with smart renaming, organizing, and deduplication.",
+  "workspaces": [
+    "server",
+    "client"
+  ],
+  "scripts": {
+    "dev": "concurrently -n server,client -c blue,green \"npm:dev:server\" \"npm:dev:client\"",
+    "dev:server": "npm --workspace server run dev",
+    "dev:client": "npm --workspace client run dev",
+    "build": "npm run build:client && npm run build:server",
+    "build:client": "npm --workspace client run build",
+    "build:server": "npm --workspace server run build",
+    "start": "node server/dist/server.js",
+    "test": "npm --workspace server run test"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}

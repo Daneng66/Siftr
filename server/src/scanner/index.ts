@@ -1,0 +1,177 @@
+import fs from "node:fs";
+import fsp from "node:fs/promises";
+import path from "node:path";
+import sharp from "sharp";
+import { config, IMAGE_EXTENSIONS } from "../config";
+import { mapLimit } from "../util/concurrency";
+import { sha256File, dHash } from "../util/hash";
+import { readExif } from "./exif";
+import { makeThumbnail } from "./thumbnails";
+import {
+  deletePhotoByPath,
+  getIndexedPaths,
+  upsertPhoto,
+} from "../db/photos";
+import { jobs } from "../jobs";
+
+const MIME_BY_EXT: Record<string, string> = {
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".png": "image/png",
+  ".webp": "image/webp",
+  ".gif": "image/gif",
+  ".tif": "image/tiff",
+  ".tiff": "image/tiff",
+  ".bmp": "image/bmp",
+  ".heic": "image/heic",
+  ".heif": "image/heif",
+  ".avif": "image/avif",
+};
+
+/** Recursively collect image file paths under a directory. */
+async function walk(dir: string): Promise<string[]> {
+  const out: string[] = [];
+  async function recurse(current: string) {
+    let entries: fs.Dirent[];
+    try {
+      entries = await fsp.readdir(current, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const full = path.join(current, entry.name);
+      if (entry.isDirectory()) {
+        // skip our own managed dirs if photos dir is nested oddly
+        if (entry.name === "thumbnails" || entry.name === ".trash") continue;
+        await recurse(full);
+      } else if (entry.isFile()) {
+        const ext = path.extname(entry.name).toLowerCase();
+        if (IMAGE_EXTENSIONS.has(ext)) out.push(full);
+      }
+    }
+  }
+  await recurse(dir);
+  return out;
+}
+
+async function indexFile(filePath: string, stat: fs.Stats): Promise<void> {
+  const ext = path.extname(filePath).toLowerCase();
+  const fileHash = await sha256File(filePath);
+
+  let width: number | null = null;
+  let height: number | null = null;
+  let phash: string | null = null;
+  try {
+    const meta = await sharp(filePath, { failOn: "none" }).metadata();
+    width = meta.width ?? null;
+    height = meta.height ?? null;
+    // account for EXIF orientation swapping dimensions
+    if (meta.orientation && meta.orientation >= 5 && width && height) {
+      [width, height] = [height, width];
+    }
+    phash = await dHash(filePath);
+  } catch {
+    /* unreadable image — still index basic info */
+  }
+
+  const exif = await readExif(filePath);
+  const thumbnailPath = await makeThumbnail(filePath, fileHash);
+  const filename = path.basename(filePath);
+
+  upsertPhoto({
+    path: filePath,
+    original_filename: filename,
+    current_filename: filename,
+    file_hash: fileHash,
+    perceptual_hash: phash,
+    file_size: stat.size,
+    width,
+    height,
+    mime_type: MIME_BY_EXT[ext] ?? null,
+    exif_date_taken: exif.dateTaken,
+    exif_camera_make: exif.cameraMake,
+    exif_camera_model: exif.cameraModel,
+    gps_lat: exif.gpsLat,
+    gps_lon: exif.gpsLon,
+    date_modified: new Date(stat.mtimeMs).toISOString(),
+    thumbnail_path: thumbnailPath,
+    mtime_ms: Math.floor(stat.mtimeMs),
+    size_seen: stat.size,
+  });
+}
+
+/** Re-index a single file (used after rename / metadata writes). No-op if gone. */
+export async function reindexFile(filePath: string): Promise<void> {
+  try {
+    const stat = await fsp.stat(filePath);
+    await indexFile(filePath, stat);
+  } catch {
+    /* file vanished — ignore */
+  }
+}
+
+export interface ScanResult {
+  scanned: number;
+  added: number;
+  updated: number;
+  removed: number;
+}
+
+/**
+ * Index the photos directory. New/changed files (by mtime+size) are hashed,
+ * thumbnailed and upserted; vanished files are pruned. Tracked as a `scan` job.
+ */
+export async function scanLibrary(): Promise<ScanResult> {
+  const job = jobs.create("scan", "Scanning library…");
+  const result: ScanResult = { scanned: 0, added: 0, updated: 0, removed: 0 };
+  try {
+    const files = await walk(config.photosDir);
+    const existing = getIndexedPaths();
+    const seen = new Set<string>();
+    let processed = 0;
+    jobs.update(job.id, { total: files.length, message: "Indexing photos…" });
+
+    await mapLimit(files, config.scanConcurrency, async (file) => {
+      seen.add(file);
+      try {
+        const stat = await fsp.stat(file);
+        const prev = existing.get(file);
+        const unchanged =
+          prev &&
+          prev.mtime_ms === Math.floor(stat.mtimeMs) &&
+          prev.size_seen === stat.size;
+        if (!unchanged) {
+          await indexFile(file, stat);
+          if (prev) result.updated++;
+          else result.added++;
+        }
+        result.scanned++;
+      } catch {
+        /* skip unreadable file */
+      } finally {
+        processed++;
+        if (processed % 10 === 0 || processed === files.length) {
+          jobs.update(job.id, { progress: processed });
+        }
+      }
+    });
+
+    // Prune files that disappeared from disk.
+    for (const knownPath of existing.keys()) {
+      if (!seen.has(knownPath)) {
+        deletePhotoByPath(knownPath);
+        result.removed++;
+      }
+    }
+
+    jobs.update(job.id, {
+      progress: files.length,
+      message: `Added ${result.added}, updated ${result.updated}, removed ${result.removed}`,
+    });
+    jobs.finish(job.id, "scan");
+    return result;
+  } catch (err) {
+    jobs.finish(job.id, "scan", err instanceof Error ? err.message : String(err));
+    throw err;
+  }
+}

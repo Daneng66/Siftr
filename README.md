@@ -47,6 +47,27 @@ data/
   .trash/       # reversible deletions + edit backups
 ```
 
+## Install on unraid
+
+Siftr is packaged as an unraid Community Apps template
+(`unraid/siftr.xml`), backed by a prebuilt image published to GHCR at
+`ghcr.io/daneng66/siftr`.
+
+Until it lands in the Community Apps catalog, you can add it manually:
+
+1. In unraid, go to **Docker → Add Container** and, in the **Template
+   repositories** field (Docker settings), add
+   `https://github.com/Daneng66/Siftr`.
+2. Pick the **Siftr** template and set the two paths:
+   - **App Data** → e.g. `/mnt/user/appdata/siftr` (database, thumbnails,
+     `.trash` — keep on cache/appdata).
+   - **Photo Library** → your existing photo share, e.g. `/mnt/user/Photos`
+     (mounted at `/data/photos`, read/write so Siftr can rename and write EXIF).
+3. Apply, then open the WebUI on port **8080** and click **Scan**.
+
+The image is `linux/amd64` only — czkawka publishes an x86_64 Linux CLI and no
+ARM build, so Siftr targets standard (Intel/AMD) unraid hardware.
+
 ## Architecture
 
 A single Node.js process serves the API under `/api/*` and the built React SPA
@@ -94,6 +115,8 @@ npm test
 | `SCAN_ON_STARTUP` | `true` | Scan the library on boot |
 | `SCAN_CONCURRENCY` | `4` | Parallel hash/thumbnail workers |
 | `THUMB_SIZE` | `256` | Thumbnail max dimension (px) |
+| `DEDUP_SIMILAR` | `false` | Also run czkawka's perceptual near-duplicate pass |
+| `CZKAWKA_IMAGE_PRESET` | `High` | Similarity sensitivity (`Minimal`…`VeryHigh`) for the perceptual pass |
 | `CZKAWKA_BIN` | `czkawka_cli` | Path to the dedup binary |
 | `EXIFTOOL_BIN` | `exiftool` | Path to exiftool |
 

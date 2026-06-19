@@ -39,11 +39,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # czkawka_cli (deduplication engine). Pin the version; the Linux CLI is a single
 # prebuilt binary published on the project's GitHub releases.
+# `set -eux` + the --version smoke test make the build FAIL if the download is
+# missing/corrupt or the binary can't execute (e.g. a missing shared library),
+# instead of silently shipping an image without a working deduper.
 ARG CZKAWKA_VERSION=7.0.0
-RUN wget -qO /usr/local/bin/czkawka_cli \
-      "https://github.com/qarmin/czkawka/releases/download/${CZKAWKA_VERSION}/linux_czkawka_cli" \
-    && chmod +x /usr/local/bin/czkawka_cli \
-    && /usr/local/bin/czkawka_cli --version || true
+RUN set -eux; \
+    wget -O /usr/local/bin/czkawka_cli \
+      "https://github.com/qarmin/czkawka/releases/download/${CZKAWKA_VERSION}/linux_czkawka_cli"; \
+    chmod +x /usr/local/bin/czkawka_cli; \
+    /usr/local/bin/czkawka_cli --version
 
 # Application artifacts.
 COPY --from=build /app/node_modules ./node_modules

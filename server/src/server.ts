@@ -1,3 +1,6 @@
+// Load .env before any module reads process.env (config.ts evaluates at import
+// time). No-op in production where there's no .env file.
+import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import fs from "node:fs";

@@ -44,13 +44,16 @@ export function TopNav() {
 
   const { data: jobsData } = useJobs(true);
   const scanRunning = jobsData?.scanRunning ?? false;
+  const dedupRunning = jobsData?.dedupRunning ?? false;
   const activeJob = jobsData?.jobs.find((j) => j.status === "running");
 
-  // Refresh library data whenever a scan transitions to finished.
+  // Refresh library data whenever a scan or dedup run transitions to finished.
+  // TopNav is always mounted, so this keeps the sidebar stats (e.g. duplicate
+  // group count) fresh regardless of which view is open.
   useEffect(() => {
-    if (!scanRunning) invalidate();
+    if (!scanRunning && !dedupRunning) invalidate();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scanRunning]);
+  }, [scanRunning, dedupRunning]);
 
   // Debounce the search box into the shared filter state.
   useEffect(() => {

@@ -3,23 +3,16 @@ import fs from "node:fs";
 import { randomUUID } from "node:crypto";
 import sharp from "sharp";
 import { config } from "../config";
-import { mapLimit } from "../util/concurrency";
-import { jobs } from "../jobs";
-import {
-  getPhotosNeedingThumbnails,
-  updateThumbnailPath,
-} from "../db/photos";
 
 /**
- * Generate a WebP thumbnail for a file, named by its hash so identical files
- * share one thumbnail. Returns the filename (relative to thumbsDir), or null
- * on failure.
+ * Generate a WebP thumbnail for a file, named by photo ID. Returns the
+ * filename (relative to thumbsDir), or null on failure.
  */
 export async function makeThumbnail(
   filePath: string,
-  fileHash: string
+  id: number
 ): Promise<string | null> {
-  const name = `${fileHash}.webp`;
+  const name = `${id}.webp`;
   const out = path.join(config.thumbsDir, name);
   try {
     // Reuse an existing, non-empty thumbnail — duplicates share one file by
@@ -33,7 +26,7 @@ export async function makeThumbnail(
     // finished thumbnail — which then gets cached by the browser for a day.
     const tmp = path.join(
       config.thumbsDir,
-      `.${fileHash}.${process.pid}.${randomUUID()}.tmp`
+      `.${id}.${process.pid}.${randomUUID()}.tmp`
     );
     try {
       await sharp(filePath, { failOn: "none" })
@@ -68,6 +61,18 @@ export function thumbnailAbsPath(name: string): string {
   return path.join(config.thumbsDir, name);
 }
 
+/**
+ * Remove the cached thumbnail for a photo id, if one exists. Best-effort: the
+ * file is named deterministically (`{id}.webp`), so we can clean it up by id
+ * without consulting the DB. Called when a photo is deleted/pruned so its
+ * thumbnail doesn't linger as an orphan.
+ */
+export async function deleteThumbnail(id: number): Promise<void> {
+  await fs.promises
+    .rm(path.join(config.thumbsDir, `${id}.webp`), { force: true })
+    .catch(() => {});
+}
+
 /** Delete every cached thumbnail. Used by a hard scan before regenerating. */
 export async function clearThumbnails(): Promise<void> {
   let entries: string[];
@@ -83,48 +88,4 @@ export async function clearThumbnails(): Promise<void> {
         fs.promises.rm(path.join(config.thumbsDir, name)).catch(() => {})
       )
   );
-}
-
-/**
- * Background job: generate thumbnails for all photos that don't have one yet.
- * Runs after a scan so indexing completes quickly and thumbnails fill in
- * without blocking the user from browsing the library.
- */
-export async function generateThumbnails(): Promise<void> {
-  if (jobs.isRunning("thumb")) return;
-
-  const photos = getPhotosNeedingThumbnails();
-  if (photos.length === 0) return;
-
-  const job = jobs.create("thumb", "Generating thumbnails…");
-  jobs.update(job.id, { total: photos.length });
-  let processed = 0;
-
-  try {
-    await mapLimit(photos, config.scanConcurrency, async (photo) => {
-      try {
-        const thumbPath = await makeThumbnail(photo.path, photo.file_hash);
-        if (thumbPath) updateThumbnailPath(photo.id, thumbPath);
-      } catch {
-        /* skip unprocessable photo */
-      } finally {
-        processed++;
-        if (processed % 10 === 0 || processed === photos.length) {
-          jobs.update(job.id, { progress: processed });
-        }
-      }
-    });
-    jobs.update(job.id, {
-      progress: photos.length,
-      message: `Generated ${photos.length} thumbnail(s)`,
-    });
-    jobs.finish(job.id, "thumb");
-  } catch (err) {
-    jobs.finish(
-      job.id,
-      "thumb",
-      err instanceof Error ? err.message : String(err)
-    );
-    throw err;
-  }
 }

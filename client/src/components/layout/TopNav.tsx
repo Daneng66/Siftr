@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useUi } from "../../store/ui";
-import { useJobs, useInvalidateLibrary } from "../../hooks/queries";
+import { useJobs, useInvalidateLibrary, useResetLibrary } from "../../hooks/queries";
 import { api } from "../../lib/api";
 import {
   ImagesIcon,
@@ -43,6 +43,7 @@ function NavLink({
 export function TopNav() {
   const { theme, toggleTheme, view, setView, search, setSearch } = useUi();
   const invalidate = useInvalidateLibrary();
+  const reset = useResetLibrary();
   const [searchInput, setSearchInput] = useState(search);
 
   const [scanMenuOpen, setScanMenuOpen] = useState(false);
@@ -52,6 +53,7 @@ export function TopNav() {
   const scanRunning = jobsData?.scanRunning ?? false;
   const dedupRunning = jobsData?.dedupRunning ?? false;
   const thumbRunning = jobsData?.thumbRunning ?? false;
+  const hardScanRunning = jobsData?.hardScanRunning ?? false;
   const activeJob =
     (scanRunning || dedupRunning || thumbRunning)
       ? jobsData?.jobs.find((j) => j.status === "running")
@@ -97,6 +99,13 @@ export function TopNav() {
     if (!scanRunning && !dedupRunning) invalidate();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scanRunning, dedupRunning]);
+
+  // A hard scan wipes the index; the moment one starts, drop the browsable
+  // library caches so no stale photos linger behind the "rebuilding" state.
+  useEffect(() => {
+    if (hardScanRunning) reset();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hardScanRunning]);
 
   // Debounce the search box into the shared filter state.
   useEffect(() => {
@@ -230,6 +239,9 @@ export function TopNav() {
               variant="danger"
               onClick={() => {
                 setHardScanConfirm(false);
+                // Blank the app to its pre-scan state immediately, rather than
+                // waiting for the server to report the index cleared.
+                reset();
                 api.startScan(true).catch(() => {});
               }}
             >

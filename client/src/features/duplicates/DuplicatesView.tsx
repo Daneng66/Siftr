@@ -3,7 +3,7 @@ import { api } from "../../lib/api";
 import {
   useDuplicates,
   useInvalidateLibrary,
-  useJobs,
+  useJobsSnapshot,
 } from "../../hooks/queries";
 import { Button, Modal } from "../../components/ui/Modal";
 import { formatBytes } from "../../lib/format";
@@ -118,21 +118,12 @@ function GroupCard({
               )}
             >
               <div className="relative aspect-square bg-slate-100 dark:bg-slate-800">
-                {m.thumbnail_path ? (
-                  <img
-                    src={api.thumbnailUrl(m.photo_id)}
-                    alt={m.current_filename}
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="h-8 w-8 text-slate-300 dark:text-slate-600">
-                      <rect x="3" y="3" width="18" height="18" rx="2" />
-                      <circle cx="8.5" cy="8.5" r="1.5" />
-                      <path d="m21 15-5-5L5 21" />
-                    </svg>
-                  </div>
-                )}
+                <img
+                  src={api.thumbnailUrl(m.photo_id)}
+                  alt={m.current_filename}
+                  loading="lazy"
+                  className="h-full w-full object-cover"
+                />
                 {st === "kept" && (
                   <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded bg-emerald-500 px-1.5 py-0.5 text-xs font-semibold text-white">
                     <CheckIcon /> Keep
@@ -188,8 +179,9 @@ function GroupCard({
 export function DuplicatesView() {
   const { data, refetch, isLoading } = useDuplicates();
   const invalidate = useInvalidateLibrary();
-  const { data: jobsData } = useJobs(true);
+  const { data: jobsData } = useJobsSnapshot();
   const dedupRunning = jobsData?.dedupRunning ?? false;
+  const hardScanRunning = jobsData?.hardScanRunning ?? false;
   const [bulkBusy, setBulkBusy] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [permDeleteArmed, setPermDeleteArmed] = useState(false);
@@ -327,7 +319,16 @@ export function DuplicatesView() {
           </div>
         )}
 
-      {isLoading ? (
+      {hardScanRunning ? (
+        <div className="rounded-xl border border-dashed border-slate-300 p-10 text-center dark:border-slate-700">
+          <CopyIcon className="mx-auto mb-2 text-3xl text-slate-300" />
+          <p className="font-medium">Rebuilding library…</p>
+          <p className="text-sm text-slate-500">
+            A hard scan is re-indexing your photos. Duplicate groups will appear
+            once it finishes.
+          </p>
+        </div>
+      ) : isLoading ? (
         <p className="text-slate-400">Loading…</p>
       ) : groups.length === 0 ? (
         <div className="rounded-xl border border-dashed border-slate-300 p-10 text-center dark:border-slate-700">

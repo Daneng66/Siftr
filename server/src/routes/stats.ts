@@ -1,24 +1,17 @@
 import { Router } from "express";
 import { getDb } from "../db";
+import { getCachedStats, setCachedStats } from "../db/statsCache";
+import { jobs } from "../jobs";
 
 export const statsRouter = Router();
 
-// In-memory TTL cache — stats are relatively stable and queried frequently
-// (sidebar polls after every invalidation). Avoids re-running the CTE on
-// every request while keeping data fresh enough for practical use.
-let _statsCache: { data: unknown; expiresAt: number } | null = null;
-const STATS_TTL_MS = 10_000;
-
-export function invalidateStatsCache(): void {
-  _statsCache = null;
-}
-
 /** GET /api/stats — library summary for the sidebar. */
 statsRouter.get("/", (_req, res) => {
-  const now = Date.now();
-  if (_statsCache && now < _statsCache.expiresAt) {
-    return res.json(_statsCache.data);
-  }
+  // While a scan or dedup is running the library is changing every batch, so the
+  // client polls for live counts — serve fresh numbers rather than cached ones.
+  const scanning = jobs.isRunning("scan") || jobs.isRunning("dedup");
+  const cached = scanning ? null : getCachedStats();
+  if (cached) return res.json(cached);
 
   const db = getDb();
   const photos = (db.prepare(`SELECT COUNT(*) AS n FROM photos`).get() as { n: number }).n;
@@ -54,6 +47,7 @@ statsRouter.get("/", (_req, res) => {
     reclaimableSize: dup.size,
   };
 
-  _statsCache = { data, expiresAt: now + STATS_TTL_MS };
+  // Only cache when idle; mid-scan values are bypassed anyway and would be stale.
+  if (!scanning) setCachedStats(data);
   res.json(data);
 });

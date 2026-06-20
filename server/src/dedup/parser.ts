@@ -9,6 +9,7 @@
  */
 export interface ParsedMember {
   path: string;
+  hash?: string;
   similarity?: string;
 }
 
@@ -18,6 +19,7 @@ export interface ParsedGroup {
 
 interface CzkawkaFile {
   path?: string;
+  hash?: unknown;
   similarity?: unknown;
 }
 
@@ -28,6 +30,7 @@ function toMembers(group: unknown): ParsedMember[] {
     if (file && typeof file.path === "string") {
       members.push({
         path: file.path,
+        hash: typeof file.hash === "string" ? file.hash : undefined,
         similarity:
           file.similarity != null ? String(file.similarity) : undefined,
       });

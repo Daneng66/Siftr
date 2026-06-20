@@ -1,7 +1,7 @@
 import { getDb } from "./index";
 
 export type DupKind = "exact" | "similar";
-export type DupStatus = "kept" | "marked_for_deletion" | "ignored";
+export type DupStatus = "kept" | "recommended" | "marked_for_deletion" | "ignored";
 
 export interface GroupMemberInput {
   photoId: number;

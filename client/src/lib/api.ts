@@ -7,7 +7,6 @@ import type {
   PhotoSummary,
   RenamePlanItem,
   Stats,
-  Tag,
 } from "./types";
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
@@ -30,8 +29,7 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
 }
 
 export interface PhotoQuery {
-  folderId?: string;
-  tagId?: number;
+  folder?: string;
   duplicatesOnly?: boolean;
   search?: string;
   sort?: string;
@@ -57,28 +55,13 @@ export const api = {
 
   stats: () => request<Stats>("/api/stats"),
   jobs: () => request<JobsResponse>("/api/jobs"),
-  startScan: () => request<{ started: boolean }>("/api/scan", { method: "POST" }),
+  startScan: (hard = false) =>
+    request<{ started: boolean }>("/api/scan", {
+      method: "POST",
+      body: JSON.stringify({ hard }),
+    }),
 
   folders: () => request<{ folders: Folder[] }>("/api/folders"),
-  createFolder: (name: string, parentId: number | null) =>
-    request<Folder>("/api/folders", {
-      method: "POST",
-      body: JSON.stringify({ name, parentId }),
-    }),
-  deleteFolder: (id: number) =>
-    request(`/api/folders/${id}`, { method: "DELETE" }),
-
-  tags: () => request<{ tags: Tag[] }>("/api/tags"),
-  assignTag: (photoIds: number[], tagName?: string, tagId?: number) =>
-    request<{ tagId: number; assigned: number }>("/api/tags/assign", {
-      method: "POST",
-      body: JSON.stringify({ photoIds, tagName, tagId }),
-    }),
-  unassignTag: (photoIds: number[], tagId: number) =>
-    request("/api/tags/unassign", {
-      method: "POST",
-      body: JSON.stringify({ photoIds, tagId }),
-    }),
 
   duplicates: (kind?: "exact" | "similar") =>
     request<{ groups: DuplicateGroup[] }>(
@@ -94,10 +77,13 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ statuses }),
     }),
-  applyDuplicates: (groupId?: number) =>
+  applyDuplicates: (groupId?: number, permanent?: boolean) =>
     request<{ deleted: number }>("/api/duplicates/apply", {
       method: "POST",
-      body: JSON.stringify(groupId ? { groupId } : {}),
+      body: JSON.stringify({
+        ...(groupId !== undefined ? { groupId } : {}),
+        ...(permanent ? { permanent } : {}),
+      }),
     }),
 
   renamePreview: (photoIds: number[], pattern: string, customText: string) =>
@@ -114,20 +100,15 @@ export const api = {
       body: JSON.stringify({ photoIds, pattern, customText }),
     }),
 
+  renamePhoto: (id: number, filename: string) =>
+    request<{ ok: boolean }>(`/api/photos/${id}/rename`, {
+      method: "PATCH",
+      body: JSON.stringify({ filename }),
+    }),
+
   editMetadata: (photoIds: number[], edits: Record<string, unknown>) =>
     request<{ updated: number }>("/api/metadata/bulk", {
       method: "POST",
       body: JSON.stringify({ photoIds, edits }),
-    }),
-
-  moveToFolder: (photoIds: number[], folderId: number | null) =>
-    request<{ moved: number }>("/api/organize/move", {
-      method: "POST",
-      body: JSON.stringify({ photoIds, folderId }),
-    }),
-  autoOrganize: (rule: string, photoIds?: number[]) =>
-    request<{ assigned: number; skipped: number }>("/api/organize/auto", {
-      method: "POST",
-      body: JSON.stringify({ rule, photoIds }),
     }),
 };

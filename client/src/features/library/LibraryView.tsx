@@ -6,8 +6,6 @@ import { PhotoGrid } from "../../components/grid/PhotoGrid";
 import { BulkActionBar } from "../../components/BulkActionBar";
 import { RenameModal } from "../rename/RenameModal";
 import { MetadataModal } from "../metadata/MetadataModal";
-import { TagModal } from "../organize/TagModal";
-import { OrganizeModal } from "../organize/OrganizeModal";
 import type { FilterState } from "../../lib/types";
 import { ImagesIcon } from "../../components/ui/icons";
 
@@ -22,20 +20,16 @@ const SORTS: { value: string; label: string }[] = [
 
 function filterTitle(f: FilterState): string {
   switch (f.kind) {
-    case "unfiled":
-      return "Unfiled";
     case "duplicates":
       return "In duplicate groups";
     case "folder":
       return f.name;
-    case "tag":
-      return `#${f.name}`;
     default:
       return "All photos";
   }
 }
 
-type ModalKind = "tag" | "rename" | "metadata" | "organize" | null;
+type ModalKind = "rename" | "metadata" | null;
 
 export function LibraryView() {
   const { filter, sort, setSort, search } = useUi();
@@ -106,18 +100,11 @@ export function LibraryView() {
 
       <BulkActionBar
         count={selection.count()}
-        onTag={() => setModal("tag")}
         onRename={() => setModal("rename")}
         onMetadata={() => setModal("metadata")}
-        onOrganize={() => setModal("organize")}
         onClear={() => selection.clear()}
       />
 
-      <TagModal
-        open={modal === "tag"}
-        onClose={() => setModal(null)}
-        photoIds={selectedIds}
-      />
       <RenameModal
         open={modal === "rename"}
         onClose={() => setModal(null)}
@@ -125,11 +112,6 @@ export function LibraryView() {
       />
       <MetadataModal
         open={modal === "metadata"}
-        onClose={() => setModal(null)}
-        photoIds={selectedIds}
-      />
-      <OrganizeModal
-        open={modal === "organize"}
         onClose={() => setModal(null)}
         photoIds={selectedIds}
       />

@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { jobs } from "../jobs";
 import { scanLibrary } from "../scanner";
+import { runDedup } from "../dedup/czkawka";
 
 export const jobsRouter = Router();
 
@@ -22,12 +23,27 @@ jobsRouter.get("/:id", (req, res) => {
 
 export const scanRouter = Router();
 
-/** POST /api/scan — kick off a library scan (rejects if one is already running). */
-scanRouter.post("/", (_req, res) => {
+/**
+ * POST /api/scan — kick off a library scan (rejects if one is already running).
+ * Body `{ hard: true }` clears all indexed data and thumbnails before rebuilding.
+ * A duplicate scan is chained on automatically once indexing completes, so the
+ * main scan keeps duplicate groups in sync without a separate user action.
+ */
+scanRouter.post("/", (req, res) => {
   if (jobs.isRunning("scan")) {
     return res.status(409).json({ error: "scan already running" });
   }
-  // Fire and forget; progress is tracked via the jobs table.
-  scanLibrary().catch((err) => console.error("[scan] failed:", err));
+  const hard = (req.body as { hard?: unknown } | undefined)?.hard === true;
+  // Fire and forget; progress for both passes is tracked via the jobs table.
+  scanLibrary({ hard })
+    .then((result) => {
+      // Only re-run the (expensive, full-directory) dedup when files actually
+      // changed — an unchanged scan leaves existing duplicate groups valid.
+      // A hard scan wipes the library, so `added` will be non-zero there too.
+      const changed = result.added + result.updated + result.removed > 0;
+      // Skip if a dedup is already in flight (e.g. an independent scan).
+      if (changed && !jobs.isRunning("dedup")) return runDedup();
+    })
+    .catch((err) => console.error("[scan] failed:", err));
   res.status(202).json({ started: true });
 });

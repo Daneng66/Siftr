@@ -1,5 +1,6 @@
 import { Router } from "express";
 import fs from "node:fs";
+import path from "node:path";
 import { z } from "zod";
 import { getDb } from "../db";
 import { getPhotoById } from "../db/photos";
@@ -8,9 +9,9 @@ import { thumbnailAbsPath } from "../scanner/thumbnails";
 export const photosRouter = Router();
 
 const listQuery = z.object({
-  folderId: z.string().optional(), // number | "none"
-  tagId: z.coerce.number().optional(),
+  folder: z.string().optional(), // rel_dir of an on-disk folder
   duplicatesOnly: z.coerce.boolean().optional(),
+  hideDuplicates: z.coerce.boolean().optional(),
   search: z.string().optional(),
   sort: z
     .enum([
@@ -41,17 +42,9 @@ photosRouter.get("/", (req, res) => {
   const where: string[] = [];
   const params: Record<string, unknown> = {};
 
-  if (q.folderId === "none") {
-    where.push("p.folder_id IS NULL");
-  } else if (q.folderId !== undefined) {
-    where.push("p.folder_id = @folderId");
-    params.folderId = Number(q.folderId);
-  }
-  if (q.tagId !== undefined) {
-    where.push(
-      "EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id AND pt.tag_id = @tagId)"
-    );
-    params.tagId = q.tagId;
+  if (q.folder !== undefined) {
+    where.push("p.rel_dir = @folder");
+    params.folder = q.folder;
   }
   if (q.duplicatesOnly) {
     where.push(
@@ -76,8 +69,7 @@ photosRouter.get("/", (req, res) => {
     .prepare(
       `SELECT p.id, p.current_filename, p.file_size, p.width, p.height,
               p.mime_type, p.exif_date_taken, p.thumbnail_path,
-              p.folder_id,
-              (SELECT COUNT(*) FROM photo_tags pt WHERE pt.photo_id = p.id) AS tag_count,
+              p.rel_dir,
               (SELECT COUNT(*) FROM duplicate_group_members dm WHERE dm.photo_id = p.id) AS dup_count
          FROM photos p
          ${whereSql}
@@ -89,19 +81,12 @@ photosRouter.get("/", (req, res) => {
   res.json({ total, items });
 });
 
-/** GET /api/photos/:id — full metadata for one photo (incl. tags). */
+/** GET /api/photos/:id — full metadata for one photo. */
 photosRouter.get("/:id", (req, res) => {
   const id = Number(req.params.id);
   const photo = getPhotoById(id);
   if (!photo) return res.status(404).json({ error: "not found" });
-  const tags = getDb()
-    .prepare(
-      `SELECT t.id, t.name FROM tags t
-         JOIN photo_tags pt ON pt.tag_id = t.id
-        WHERE pt.photo_id = ? ORDER BY t.name`
-    )
-    .all(id);
-  res.json({ ...photo, tags });
+  res.json(photo);
 });
 
 /** GET /api/photos/:id/thumbnail — the cached WebP thumbnail. */
@@ -114,6 +99,41 @@ photosRouter.get("/:id/thumbnail", (req, res) => {
     return res.status(404).json({ error: "thumbnail missing" });
   res.setHeader("Cache-Control", "public, max-age=86400");
   res.sendFile(abs);
+});
+
+/** PATCH /api/photos/:id/rename — rename the file on disk and update DB. */
+photosRouter.patch("/:id/rename", (req, res) => {
+  const id = Number(req.params.id);
+  const { filename } = req.body as { filename?: string };
+
+  if (!filename || /[/\\]/.test(filename)) {
+    return res.status(400).json({ error: "invalid filename" });
+  }
+
+  const db = getDb();
+  const photo = db
+    .prepare("SELECT path FROM photos WHERE id = ?")
+    .get(id) as { path: string } | undefined;
+  if (!photo) return res.status(404).json({ error: "not found" });
+
+  const dir = path.dirname(photo.path);
+  const newPath = path.join(dir, filename);
+
+  if (newPath !== photo.path && fs.existsSync(newPath)) {
+    return res.status(409).json({ error: "a file with that name already exists" });
+  }
+
+  try {
+    fs.renameSync(photo.path, newPath);
+  } catch {
+    return res.status(500).json({ error: "failed to rename file" });
+  }
+
+  db.prepare(
+    "UPDATE photos SET current_filename = ?, path = ? WHERE id = ?"
+  ).run(filename, newPath, id);
+
+  res.json({ ok: true });
 });
 
 /** GET /api/photos/:id/raw — the original full-resolution file. */

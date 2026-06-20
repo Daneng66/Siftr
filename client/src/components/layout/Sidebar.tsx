@@ -1,9 +1,9 @@
-import { useMemo, useState } from "react";
-import { useFolders, useStats, useTags } from "../../hooks/queries";
+import { useMemo } from "react";
+import { useFolders, useStats } from "../../hooks/queries";
 import { useUi } from "../../store/ui";
 import { formatBytes } from "../../lib/format";
 import type { FilterState, Folder } from "../../lib/types";
-import { FolderIcon, ImagesIcon, CopyIcon, TagIcon } from "../ui/icons";
+import { FolderIcon, ImagesIcon, CopyIcon } from "../ui/icons";
 import { clsx } from "clsx";
 
 function StatRow({ label, value }: { label: string; value: string | number }) {
@@ -17,8 +17,7 @@ function StatRow({ label, value }: { label: string; value: string | number }) {
 
 function filtersEqual(a: FilterState, b: FilterState): boolean {
   if (a.kind !== b.kind) return false;
-  if ((a.kind === "folder" || a.kind === "tag") && (b.kind === "folder" || b.kind === "tag"))
-    return a.id === b.id;
+  if (a.kind === "folder" && b.kind === "folder") return a.path === b.path;
   return true;
 }
 
@@ -59,12 +58,12 @@ interface FolderNode extends Folder {
 }
 
 function buildTree(folders: Folder[]): FolderNode[] {
-  const map = new Map<number, FolderNode>();
-  folders.forEach((f) => map.set(f.id, { ...f, children: [] }));
+  const map = new Map<string, FolderNode>();
+  folders.forEach((f) => map.set(f.path, { ...f, children: [] }));
   const roots: FolderNode[] = [];
   map.forEach((node) => {
-    if (node.parent_id && map.has(node.parent_id))
-      map.get(node.parent_id)!.children.push(node);
+    if (node.parent_path && map.has(node.parent_path))
+      map.get(node.parent_path)!.children.push(node);
     else roots.push(node);
   });
   return roots;
@@ -75,15 +74,15 @@ function FolderTree({ nodes, depth = 0 }: { nodes: FolderNode[]; depth?: number 
   return (
     <>
       {nodes.map((node) => (
-        <div key={node.id}>
+        <div key={node.path}>
           <button
             onClick={() =>
-              setFilter({ kind: "folder", id: node.id, name: node.name })
+              setFilter({ kind: "folder", path: node.path, name: node.name })
             }
             style={{ paddingLeft: `${0.625 + depth * 0.85}rem` }}
             className={clsx(
               "flex w-full items-center gap-2 rounded-lg py-1.5 pr-2.5 text-sm transition-colors",
-              filter.kind === "folder" && filter.id === node.id
+              filter.kind === "folder" && filter.path === node.path
                 ? "bg-brand-50 font-medium text-brand-700 dark:bg-brand-900/40 dark:text-brand-200"
                 : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
             )}
@@ -107,15 +106,11 @@ export function Sidebar() {
   const { filter, setFilter, setView } = useUi();
   const { data: stats } = useStats();
   const { data: foldersData } = useFolders();
-  const { data: tagsData } = useTags();
-  const [showAllTags, setShowAllTags] = useState(false);
 
   const tree = useMemo(
     () => buildTree(foldersData?.folders ?? []),
     [foldersData]
   );
-  const tags = tagsData?.tags ?? [];
-  const visibleTags = showAllTags ? tags : tags.slice(0, 8);
 
   const select = (f: FilterState) => {
     setFilter(f);
@@ -131,7 +126,11 @@ export function Sidebar() {
         <div className="space-y-1">
           <StatRow label="Photos" value={stats?.photos ?? 0} />
           <StatRow label="Total size" value={formatBytes(stats?.totalSize ?? 0)} />
-          <StatRow label="Duplicate groups" value={stats?.duplicateGroups ?? 0} />
+          <StatRow label="Duplicates" value={stats?.duplicateCount ?? 0} />
+          <StatRow
+            label="Reclaimable"
+            value={formatBytes(stats?.reclaimableSize ?? 0)}
+          />
         </div>
       </section>
 
@@ -148,12 +147,6 @@ export function Sidebar() {
             count={stats?.photos}
           />
           <FilterButton
-            active={filtersEqual(filter, { kind: "unfiled" })}
-            onClick={() => select({ kind: "unfiled" })}
-            icon={<FolderIcon />}
-            label="Unfiled"
-          />
-          <FilterButton
             active={filtersEqual(filter, { kind: "duplicates" })}
             onClick={() => select({ kind: "duplicates" })}
             icon={<CopyIcon />}
@@ -168,7 +161,8 @@ export function Sidebar() {
         </h3>
         {tree.length === 0 ? (
           <p className="px-2.5 text-xs text-slate-400">
-            No folders yet. Use bulk actions or auto-organize to create them.
+            No subfolders. Folders mirror the directory structure of your photos
+            on disk.
           </p>
         ) : (
           <div className="space-y-0.5">
@@ -177,41 +171,6 @@ export function Sidebar() {
         )}
       </section>
 
-      <section>
-        <h3 className="mb-1.5 px-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
-          Tags
-        </h3>
-        {tags.length === 0 ? (
-          <p className="px-2.5 text-xs text-slate-400">No tags yet.</p>
-        ) : (
-          <div className="flex flex-wrap gap-1.5 px-1">
-            {visibleTags.map((tag) => (
-              <button
-                key={tag.id}
-                onClick={() => select({ kind: "tag", id: tag.id, name: tag.name })}
-                className={clsx(
-                  "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs transition-colors",
-                  filter.kind === "tag" && filter.id === tag.id
-                    ? "bg-brand-600 text-white"
-                    : "bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
-                )}
-              >
-                <TagIcon className="text-[0.7rem]" />
-                {tag.name}
-                <span className="opacity-60">{tag.photo_count}</span>
-              </button>
-            ))}
-            {tags.length > 8 && (
-              <button
-                onClick={() => setShowAllTags((v) => !v)}
-                className="px-2 py-1 text-xs text-brand-600 hover:underline"
-              >
-                {showAllTags ? "Show less" : `+${tags.length - 8} more`}
-              </button>
-            )}
-          </div>
-        )}
-      </section>
     </aside>
   );
 }

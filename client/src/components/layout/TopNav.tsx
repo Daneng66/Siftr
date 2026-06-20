@@ -1,15 +1,18 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useUi } from "../../store/ui";
 import { useJobs, useInvalidateLibrary } from "../../hooks/queries";
 import { api } from "../../lib/api";
 import {
   ImagesIcon,
   CopyIcon,
+  CheckIcon,
+  ChevronDownIcon,
   MoonIcon,
   ScanIcon,
   SunIcon,
+  XIcon,
 } from "../ui/icons";
-import { Button } from "../ui/Modal";
+import { Button, Modal } from "../ui/Modal";
 
 function NavLink({
   active,
@@ -42,10 +45,49 @@ export function TopNav() {
   const invalidate = useInvalidateLibrary();
   const [searchInput, setSearchInput] = useState(search);
 
+  const [scanMenuOpen, setScanMenuOpen] = useState(false);
+  const [hardScanConfirm, setHardScanConfirm] = useState(false);
+
   const { data: jobsData } = useJobs(true);
   const scanRunning = jobsData?.scanRunning ?? false;
   const dedupRunning = jobsData?.dedupRunning ?? false;
-  const activeJob = jobsData?.jobs.find((j) => j.status === "running");
+  const activeJob =
+    (scanRunning || dedupRunning)
+      ? jobsData?.jobs.find((j) => j.status === "running")
+      : undefined;
+
+  // Transient "scan finished" toast. We key off the id of the most recent
+  // finished scan job rather than a running→idle transition, so even a scan
+  // that completes between polls still surfaces a result.
+  const [scanToast, setScanToast] = useState<{ message: string; error: boolean } | null>(null);
+  const lastScanJobId = useRef<string | null>(null);
+
+  useEffect(() => {
+    const latestScan = jobsData?.jobs.find(
+      (j) => j.type === "scan" && j.status !== "running"
+    );
+    if (!latestScan) return;
+    // First observation after mount: remember it without toasting for a scan
+    // that finished before the page was even open.
+    if (lastScanJobId.current === null) {
+      lastScanJobId.current = latestScan.id;
+      return;
+    }
+    if (latestScan.id !== lastScanJobId.current) {
+      lastScanJobId.current = latestScan.id;
+      setScanToast({
+        message: latestScan.error || latestScan.message || "No changes",
+        error: !!latestScan.error,
+      });
+    }
+  }, [jobsData]);
+
+  // Auto-dismiss the toast a few seconds after it appears.
+  useEffect(() => {
+    if (!scanToast) return;
+    const t = setTimeout(() => setScanToast(null), 5000);
+    return () => clearTimeout(t);
+  }, [scanToast]);
 
   // Refresh library data whenever a scan or dedup run transitions to finished.
   // TopNav is always mounted, so this keeps the sidebar stats (e.g. duplicate
@@ -96,7 +138,7 @@ export function TopNav() {
 
       <div className="flex items-center gap-2">
         {activeJob && (
-          <span className="hidden text-xs text-slate-500 md:inline">
+          <span className="text-xs text-slate-500">
             {activeJob.message ||
               `${activeJob.type}… ${activeJob.progress}/${activeJob.total}`}
           </span>
@@ -108,15 +150,132 @@ export function TopNav() {
         >
           {theme === "dark" ? <SunIcon className="text-lg" /> : <MoonIcon className="text-lg" />}
         </button>
-        <Button
-          variant="primary"
-          disabled={scanRunning}
-          onClick={() => api.startScan().catch(() => {})}
-        >
-          <ScanIcon className={scanRunning ? "animate-spin" : ""} />
-          {scanRunning ? "Scanning…" : "Scan"}
-        </Button>
+        <div className="relative flex">
+          <Button
+            variant="primary"
+            disabled={scanRunning}
+            className="rounded-r-none"
+            onClick={() => api.startScan().catch(() => {})}
+          >
+            <ScanIcon className={scanRunning ? "animate-spin" : ""} />
+            {scanRunning ? "Scanning…" : "Scan"}
+          </Button>
+          <Button
+            variant="primary"
+            disabled={scanRunning}
+            aria-label="Scan options"
+            aria-haspopup="menu"
+            aria-expanded={scanMenuOpen}
+            className="ml-px rounded-l-none px-2"
+            onClick={() => setScanMenuOpen((o) => !o)}
+          >
+            <ChevronDownIcon />
+          </Button>
+          {scanMenuOpen && (
+            <>
+              <div
+                className="fixed inset-0 z-30"
+                onClick={() => setScanMenuOpen(false)}
+              />
+              <div
+                role="menu"
+                className="absolute right-0 top-full z-40 mt-1 w-56 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-700 dark:bg-slate-800"
+              >
+                <button
+                  role="menuitem"
+                  disabled={dedupRunning}
+                  className="block w-full px-3 py-2 text-left hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-slate-700"
+                  onClick={() => {
+                    setScanMenuOpen(false);
+                    api.startDedup().catch(() => {});
+                  }}
+                >
+                  <span className="text-sm font-medium">
+                    {dedupRunning ? "Scanning duplicates…" : "Scan for duplicates"}
+                  </span>
+                  <span className="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">
+                    Find duplicate groups without re-indexing photos
+                  </span>
+                </button>
+                <button
+                  role="menuitem"
+                  className="block w-full px-3 py-2 text-left hover:bg-slate-100 dark:hover:bg-slate-700"
+                  onClick={() => {
+                    setScanMenuOpen(false);
+                    setHardScanConfirm(true);
+                  }}
+                >
+                  <span className="text-sm font-medium">Hard Scan</span>
+                  <span className="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">
+                    Clear all data &amp; thumbnails, then rebuild
+                  </span>
+                </button>
+              </div>
+            </>
+          )}
+        </div>
       </div>
+
+      <Modal
+        open={hardScanConfirm}
+        onClose={() => setHardScanConfirm(false)}
+        title="Hard scan?"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setHardScanConfirm(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              onClick={() => {
+                setHardScanConfirm(false);
+                api.startScan(true).catch(() => {});
+              }}
+            >
+              Clear &amp; rebuild
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-slate-600 dark:text-slate-300">
+          This clears the entire photo index, all duplicate groups, and every
+          cached thumbnail, then rebuilds everything from the files on disk,
+          including the folder structure.
+        </p>
+        <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+          Your photo files on disk are not touched.
+        </p>
+      </Modal>
+
+      {scanToast && (
+        <div
+          role="status"
+          className={`fixed bottom-4 right-4 z-50 flex max-w-sm items-start gap-2 rounded-lg border px-3.5 py-2.5 text-sm shadow-lg ${
+            scanToast.error
+              ? "border-red-200 bg-red-50 text-red-800 dark:border-red-900/60 dark:bg-red-950/60 dark:text-red-200"
+              : "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/60 dark:text-emerald-200"
+          }`}
+        >
+          {scanToast.error ? (
+            <XIcon className="mt-0.5 shrink-0 text-base" />
+          ) : (
+            <CheckIcon className="mt-0.5 shrink-0 text-base" />
+          )}
+          <div className="flex-1">
+            <p className="font-medium">
+              {scanToast.error ? "Scan failed" : "Scan complete"}
+            </p>
+            <p className="mt-0.5 opacity-90">{scanToast.message}</p>
+          </div>
+          <button
+            onClick={() => setScanToast(null)}
+            className="-mr-1 -mt-0.5 shrink-0 rounded p-1 opacity-70 hover:opacity-100"
+            aria-label="Dismiss"
+          >
+            <XIcon className="text-sm" />
+          </button>
+        </div>
+      )}
     </header>
   );
 }

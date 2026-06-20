@@ -7,8 +7,7 @@ export interface PhotoSummary {
   mime_type: string | null;
   exif_date_taken: string | null;
   thumbnail_path: string | null;
-  folder_id: number | null;
-  tag_count: number;
+  rel_dir: string;
   dup_count: number;
 }
 
@@ -23,19 +22,13 @@ export interface PhotoDetail extends PhotoSummary {
   gps_lon: number | null;
   date_imported: string;
   date_modified: string | null;
-  tags: { id: number; name: string }[];
 }
 
+/** A directory on disk that contains photos (or descends to one). */
 export interface Folder {
-  id: number;
+  path: string;
   name: string;
-  parent_id: number | null;
-  photo_count: number;
-}
-
-export interface Tag {
-  id: number;
-  name: string;
+  parent_path: string | null;
   photo_count: number;
 }
 
@@ -43,8 +36,10 @@ export interface Stats {
   photos: number;
   totalSize: number;
   folders: number;
-  tags: number;
-  duplicateGroups: number;
+  /** Number of redundant duplicate copies (excludes the one kept per group). */
+  duplicateCount: number;
+  /** Bytes reclaimable by removing those redundant copies. */
+  reclaimableSize: number;
 }
 
 export interface Job {
@@ -65,7 +60,7 @@ export interface JobsResponse {
   dedupRunning: boolean;
 }
 
-export type DupStatus = "kept" | "marked_for_deletion" | "ignored";
+export type DupStatus = "kept" | "recommended" | "marked_for_deletion" | "ignored";
 
 export interface DuplicateMember {
   group_id: number;
@@ -96,9 +91,7 @@ export interface RenamePlanItem {
 
 export type FilterState =
   | { kind: "all" }
-  | { kind: "unfiled" }
   | { kind: "duplicates" }
-  | { kind: "folder"; id: number; name: string }
-  | { kind: "tag"; id: number; name: string };
+  | { kind: "folder"; path: string; name: string };
 
 export type View = "library" | "duplicates";

@@ -14,17 +14,34 @@ statsRouter.get("/", (_req, res) => {
       n: number;
     }
   ).n;
-  const folders = (db.prepare(`SELECT COUNT(*) AS n FROM folders`).get() as {
-    n: number;
-  }).n;
-  const tags = (db.prepare(`SELECT COUNT(*) AS n FROM tags`).get() as {
-    n: number;
-  }).n;
-  const duplicateGroups = (
-    db.prepare(`SELECT COUNT(*) AS n FROM duplicate_groups`).get() as {
-      n: number;
-    }
+  const folders = (
+    db
+      .prepare(`SELECT COUNT(DISTINCT rel_dir) AS n FROM photos WHERE rel_dir <> ''`)
+      .get() as { n: number }
   ).n;
+  // Redundant copies and the storage they occupy: per group we assume one copy
+  // is kept (the largest), so the rest are reclaimable if removed.
+  const dup = db
+    .prepare(
+      `WITH g AS (
+         SELECT COUNT(*) AS cnt,
+                SUM(p.file_size) AS total,
+                MAX(p.file_size) AS keep
+         FROM duplicate_group_members m
+         JOIN photos p ON p.id = m.photo_id
+         GROUP BY m.group_id
+       )
+       SELECT COALESCE(SUM(cnt - 1), 0) AS count,
+              COALESCE(SUM(total - keep), 0) AS size
+       FROM g`
+    )
+    .get() as { count: number; size: number };
 
-  res.json({ photos, totalSize, folders, tags, duplicateGroups });
+  res.json({
+    photos,
+    totalSize,
+    folders,
+    duplicateCount: dup.count,
+    reclaimableSize: dup.size,
+  });
 });

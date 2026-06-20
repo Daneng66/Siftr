@@ -1,4 +1,5 @@
 import { Router } from "express";
+import fsp from "node:fs/promises";
 import { z } from "zod";
 import { jobs } from "../jobs";
 import { runDedup } from "../dedup/czkawka";
@@ -35,7 +36,7 @@ const resolveSchema = z.object({
     .array(
       z.object({
         photoId: z.number(),
-        status: z.enum(["kept", "marked_for_deletion", "ignored"]),
+        status: z.enum(["kept", "recommended", "marked_for_deletion", "ignored"]),
       })
     )
     .min(1),
@@ -49,15 +50,18 @@ duplicatesRouter.post("/:groupId/resolve", (req, res) => {
   res.json({ updated: statuses.length });
 });
 
-const applySchema = z.object({ groupId: z.number().optional() });
+const applySchema = z.object({
+  groupId: z.number().optional(),
+  permanent: z.boolean().optional(),
+});
 
 /**
- * POST /api/duplicates/apply — move every member marked_for_deletion to .trash,
- * remove it from the index, and drop now-trivial groups. Optionally scoped to one
- * group.
+ * POST /api/duplicates/apply — move every member marked_for_deletion to .trash
+ * (or delete permanently when permanent=true), remove from index, drop trivial groups.
+ * Optionally scoped to one group.
  */
 duplicatesRouter.post("/apply", async (req, res) => {
-  const { groupId } = applySchema.parse(req.body ?? {});
+  const { groupId, permanent } = applySchema.parse(req.body ?? {});
   const db = getDb();
   const groupIds: number[] = groupId
     ? [groupId]
@@ -74,9 +78,13 @@ duplicatesRouter.post("/apply", async (req, res) => {
       const photo = getPhotoById(m.photo_id);
       if (!photo) continue;
       try {
-        await moveToTrash(photo.path);
+        if (permanent) {
+          await fsp.unlink(photo.path);
+        } else {
+          await moveToTrash(photo.path);
+        }
       } catch (err) {
-        console.error("[dedup] trash failed for", photo.path, err);
+        console.error("[dedup] delete failed for", photo.path, err);
         continue;
       }
       deletePhotoById(photo.id); // cascades out of group membership

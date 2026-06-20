@@ -1,6 +1,6 @@
 # Siftr
 
-Sift through your photo library with smart renaming, organizing, and deduplication.
+Sift through your photo library with smart renaming, browsing, and deduplication.
 
 Siftr is a self-hosted photo manager that ships as a **single all-in-one Docker
 container** — React frontend, Node/Express API, SQLite index, and the
@@ -10,7 +10,7 @@ container** — React frontend, Node/Express API, SQLite index, and the
 
 - **Library browser** — fast, virtualized photo grid that stays smooth at
   1,000–10,000 photos. Hover quick-actions (download / select) and
-  corner badges (duplicate indicator, file size, tag count).
+  corner badges (duplicate indicator, file size).
 - **Deduplication** — `czkawka_cli` finds exact (hash-based) duplicate groups.
   Compare copies side-by-side and pick which to keep; deletions move to a
   reversible `.trash`. (A perceptual "similar images" pass is also wired up,
@@ -19,9 +19,8 @@ container** — React frontend, Node/Express API, SQLite index, and the
   `{camera}`, `{custom}`) with a live preview and collision detection.
 - **Metadata editing** — view and edit EXIF (date, GPS, camera) individually or
   across a selection; changes are written back into the files with `exiftool`.
-- **Organization** — hierarchical folders and tags, plus rule-based auto-organize
-  (by year, year/month, camera, or GPS location). Folders are virtual (DB-only;
-  files are not moved).
+- **Folders** — the sidebar mirrors the actual directory structure of your
+  photos on disk; pick a folder to browse just the photos it contains.
 - **UX** — card dashboard, left sidebar (folders / filters / stats), top nav,
   dark mode, and low-friction bulk selection (click, shift-click range,
   ctrl-click toggle, drag-select marquee).

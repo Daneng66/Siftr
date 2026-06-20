@@ -65,6 +65,7 @@ export function RenameModal({
       onClose={onClose}
       title={`Bulk rename ${photoIds.length} photo${photoIds.length === 1 ? "" : "s"}`}
       wide
+      tall
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>
@@ -80,7 +81,7 @@ export function RenameModal({
         </>
       }
     >
-      <div className="space-y-4">
+      <div className="flex min-h-0 flex-1 flex-col gap-4">
         <div>
           <label className="mb-1 block text-sm font-medium">Pattern</label>
           <input
@@ -120,9 +121,9 @@ export function RenameModal({
           </p>
         )}
 
-        <div className="overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700">
+        <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border border-slate-200 dark:border-slate-700">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-400 dark:bg-slate-800">
+            <thead className="sticky top-0 z-10 bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-400 dark:bg-slate-800">
               <tr>
                 <th className="px-3 py-2 font-medium">Current</th>
                 <th className="px-3 py-2 font-medium">New name</th>

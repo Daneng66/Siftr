@@ -5,9 +5,11 @@ import sharp from "sharp";
 import { config, IMAGE_EXTENSIONS } from "../config";
 import { mapLimit } from "../util/concurrency";
 import { sha256File, dHash } from "../util/hash";
+import { relDir } from "../util/relpath";
 import { readExif } from "./exif";
-import { makeThumbnail } from "./thumbnails";
+import { makeThumbnail, clearThumbnails } from "./thumbnails";
 import {
+  clearLibrary,
   deletePhotoByPath,
   getIndexedPaths,
   upsertPhoto,
@@ -95,6 +97,7 @@ async function indexFile(filePath: string, stat: fs.Stats): Promise<void> {
     gps_lon: exif.gpsLon,
     date_modified: new Date(stat.mtimeMs).toISOString(),
     thumbnail_path: thumbnailPath,
+    rel_dir: relDir(filePath),
     mtime_ms: Math.floor(stat.mtimeMs),
     size_seen: stat.size,
   });
@@ -117,14 +120,30 @@ export interface ScanResult {
   removed: number;
 }
 
+export interface ScanOptions {
+  /**
+   * Wipe the photo index and all cached thumbnails before scanning, forcing a
+   * full rebuild from disk. Otherwise unchanged files (by mtime+size) are skipped.
+   */
+  hard?: boolean;
+}
+
 /**
  * Index the photos directory. New/changed files (by mtime+size) are hashed,
  * thumbnailed and upserted; vanished files are pruned. Tracked as a `scan` job.
+ * A hard scan first clears all indexed data and thumbnails, then regenerates.
  */
-export async function scanLibrary(): Promise<ScanResult> {
-  const job = jobs.create("scan", "Scanning library…");
+export async function scanLibrary(opts: ScanOptions = {}): Promise<ScanResult> {
+  const job = jobs.create(
+    "scan",
+    opts.hard ? "Hard scan: clearing data…" : "Scanning library…"
+  );
   const result: ScanResult = { scanned: 0, added: 0, updated: 0, removed: 0 };
   try {
+    if (opts.hard) {
+      clearLibrary();
+      await clearThumbnails();
+    }
     const files = await walk(config.photosDir);
     const existing = getIndexedPaths();
     const seen = new Set<string>();

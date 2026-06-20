@@ -54,12 +54,6 @@ export const FolderIcon = (p: IconProps) => (
     <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" />
   </Svg>
 );
-export const TagIcon = (p: IconProps) => (
-  <Svg {...p}>
-    <path d="M20.59 13.41 13.42 20.6a2 2 0 0 1-2.83 0L3 13V3h10l7.59 7.59a2 2 0 0 1 0 2.82Z" />
-    <circle cx="7.5" cy="7.5" r="1.5" fill="currentColor" />
-  </Svg>
-);
 export const TrashIcon = (p: IconProps) => (
   <Svg {...p}>
     <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
@@ -102,5 +96,10 @@ export const XIcon = (p: IconProps) => (
 export const ChevronRightIcon = (p: IconProps) => (
   <Svg {...p}>
     <path d="m9 18 6-6-6-6" />
+  </Svg>
+);
+export const ChevronDownIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="m6 9 6 6 6-6" />
   </Svg>
 );

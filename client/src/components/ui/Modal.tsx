@@ -8,6 +8,7 @@ interface ModalProps {
   children: ReactNode;
   footer?: ReactNode;
   wide?: boolean;
+  tall?: boolean;
 }
 
 export function Modal({
@@ -17,6 +18,7 @@ export function Modal({
   children,
   footer,
   wide,
+  tall,
 }: ModalProps) {
   useEffect(() => {
     if (!open) return;
@@ -32,7 +34,9 @@ export function Modal({
       onMouseDown={onClose}
     >
       <div
-        className={`flex max-h-[90vh] w-full ${
+        className={`flex w-full ${
+          tall ? "min-h-[24rem] max-h-[90vh]" : "max-h-[90vh]"
+        } ${
           wide ? "max-w-5xl" : "max-w-lg"
         } flex-col overflow-hidden rounded-xl bg-white shadow-2xl dark:bg-slate-900`}
         onMouseDown={(e) => e.stopPropagation()}
@@ -47,7 +51,13 @@ export function Modal({
             <XIcon className="text-lg" />
           </button>
         </div>
-        <div className="scroll-area flex-1 overflow-y-auto px-5 py-4">
+        <div
+          className={`px-5 py-4 ${
+            tall
+              ? "flex min-h-0 flex-1 flex-col overflow-hidden"
+              : "scroll-area flex-1 overflow-y-auto"
+          }`}
+        >
           {children}
         </div>
         {footer && (

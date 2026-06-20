@@ -41,10 +41,6 @@ export function useFolders() {
   return useQuery({ queryKey: ["folders"], queryFn: api.folders });
 }
 
-export function useTags() {
-  return useQuery({ queryKey: ["tags"], queryFn: api.tags });
-}
-
 export function useJobs(enabled: boolean) {
   return useQuery({
     queryKey: ["jobs"],
@@ -67,7 +63,6 @@ export function useInvalidateLibrary() {
     qc.invalidateQueries({ queryKey: ["photos"] });
     qc.invalidateQueries({ queryKey: ["stats"] });
     qc.invalidateQueries({ queryKey: ["folders"] });
-    qc.invalidateQueries({ queryKey: ["tags"] });
     qc.invalidateQueries({ queryKey: ["duplicates"] });
   };
 }

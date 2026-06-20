@@ -49,19 +49,14 @@ export const useUi = create<UiState>((set) => ({
 
 /** Translate a UI filter into photo-list query params. */
 export function filterToQuery(filter: FilterState): {
-  folderId?: string;
-  tagId?: number;
+  folder?: string;
   duplicatesOnly?: boolean;
 } {
   switch (filter.kind) {
-    case "unfiled":
-      return { folderId: "none" };
     case "duplicates":
       return { duplicatesOnly: true };
     case "folder":
-      return { folderId: String(filter.id) };
-    case "tag":
-      return { tagId: filter.id };
+      return { folder: filter.path };
     default:
       return {};
   }

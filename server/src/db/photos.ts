@@ -19,7 +19,7 @@ export interface PhotoRow {
   date_imported: string;
   date_modified: string | null;
   thumbnail_path: string | null;
-  folder_id: number | null;
+  rel_dir: string;
   mtime_ms: number;
   size_seen: number;
 }
@@ -41,6 +41,7 @@ export interface PhotoUpsert {
   gps_lon: number | null;
   date_modified: string | null;
   thumbnail_path: string | null;
+  rel_dir: string;
   mtime_ms: number;
   size_seen: number;
 }
@@ -53,12 +54,12 @@ export function upsertPhoto(p: PhotoUpsert): void {
          path, original_filename, current_filename, file_hash, perceptual_hash,
          file_size, width, height, mime_type, exif_date_taken, exif_camera_make,
          exif_camera_model, gps_lat, gps_lon, date_modified, thumbnail_path,
-         mtime_ms, size_seen
+         rel_dir, mtime_ms, size_seen
        ) VALUES (
          @path, @original_filename, @current_filename, @file_hash, @perceptual_hash,
          @file_size, @width, @height, @mime_type, @exif_date_taken, @exif_camera_make,
          @exif_camera_model, @gps_lat, @gps_lon, @date_modified, @thumbnail_path,
-         @mtime_ms, @size_seen
+         @rel_dir, @mtime_ms, @size_seen
        )
        ON CONFLICT(path) DO UPDATE SET
          current_filename = excluded.current_filename,
@@ -75,6 +76,7 @@ export function upsertPhoto(p: PhotoUpsert): void {
          gps_lon          = excluded.gps_lon,
          date_modified    = excluded.date_modified,
          thumbnail_path   = excluded.thumbnail_path,
+         rel_dir          = excluded.rel_dir,
          mtime_ms         = excluded.mtime_ms,
          size_seen        = excluded.size_seen`
     )
@@ -120,6 +122,24 @@ export function deletePhotoByPath(path: string): void {
 
 export function deletePhotoById(id: number): void {
   getDb().prepare(`DELETE FROM photos WHERE id = ?`).run(id);
+}
+
+/**
+ * Wipe the entire photo index and everything derived from it (duplicate
+ * groups). Folders are derived from photo paths, so they rebuild automatically
+ * on the next scan. Runs in a single transaction.
+ */
+export function clearLibrary(): void {
+  const db = getDb();
+  // A managed transaction rolls back automatically on error rather than leaving
+  // a half-open one behind (which would poison every later transaction with
+  // "cannot start a transaction within a transaction").
+  const clear = db.transaction(() => {
+    db.prepare(`DELETE FROM duplicate_group_members`).run();
+    db.prepare(`DELETE FROM duplicate_groups`).run();
+    db.prepare(`DELETE FROM photos`).run();
+  });
+  clear();
 }
 
 export function countPhotos(): number {

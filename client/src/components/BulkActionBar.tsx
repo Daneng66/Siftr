@@ -1,27 +1,17 @@
 import { Button } from "./ui/Modal";
-import {
-  FolderIcon,
-  PencilIcon,
-  TagIcon,
-  TextIcon,
-  XIcon,
-} from "./ui/icons";
+import { PencilIcon, TextIcon, XIcon } from "./ui/icons";
 
 interface Props {
   count: number;
-  onTag: () => void;
   onRename: () => void;
   onMetadata: () => void;
-  onOrganize: () => void;
   onClear: () => void;
 }
 
 export function BulkActionBar({
   count,
-  onTag,
   onRename,
   onMetadata,
-  onOrganize,
   onClear,
 }: Props) {
   if (count === 0) return null;
@@ -32,17 +22,11 @@ export function BulkActionBar({
           {count} selected
         </span>
         <div className="mx-0.5 h-6 w-px bg-slate-200 dark:bg-slate-700" />
-        <Button variant="ghost" onClick={onTag}>
-          <TagIcon /> Tag
-        </Button>
         <Button variant="ghost" onClick={onRename}>
           <TextIcon /> Rename
         </Button>
         <Button variant="ghost" onClick={onMetadata}>
           <PencilIcon /> Metadata
-        </Button>
-        <Button variant="ghost" onClick={onOrganize}>
-          <FolderIcon /> Organize
         </Button>
         <div className="mx-0.5 h-6 w-px bg-slate-200 dark:bg-slate-700" />
         <Button variant="ghost" onClick={onClear} aria-label="Clear selection">

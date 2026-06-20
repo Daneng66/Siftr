@@ -111,7 +111,7 @@ async function scanKind(kind: DupKind): Promise<GroupMemberInput[][]> {
       }
       if (members.length >= 2) {
         // Suggest keeping the largest file.
-        if (largestIdx >= 0) members[largestIdx].status = "kept";
+        if (largestIdx >= 0) members[largestIdx].status = "recommended";
         groups.push(members);
       }
     }

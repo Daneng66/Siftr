@@ -3,7 +3,7 @@ import type { PhotoSummary } from "../../lib/types";
 import { api } from "../../lib/api";
 import { formatBytes } from "../../lib/format";
 import { clsx } from "clsx";
-import { CheckIcon, CopyIcon, DownloadIcon, TagIcon } from "../ui/icons";
+import { CheckIcon, CopyIcon, DownloadIcon } from "../ui/icons";
 
 interface Props {
   photo: PhotoSummary;
@@ -54,11 +54,6 @@ function PhotoCardImpl({ photo, selected, onClick, onOpenDetail }: Props) {
             title="In a duplicate group"
           >
             <CopyIcon className="text-[0.7rem]" /> dup
-          </span>
-        )}
-        {photo.tag_count > 0 && (
-          <span className="inline-flex items-center gap-0.5 rounded bg-black/55 px-1.5 py-0.5 text-[0.65rem] font-medium text-white">
-            <TagIcon className="text-[0.7rem]" /> {photo.tag_count}
           </span>
         )}
       </div>

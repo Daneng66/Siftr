@@ -33,3 +33,20 @@ export async function makeThumbnail(
 export function thumbnailAbsPath(name: string): string {
   return path.join(config.thumbsDir, name);
 }
+
+/** Delete every cached thumbnail. Used by a hard scan before regenerating. */
+export async function clearThumbnails(): Promise<void> {
+  let entries: string[];
+  try {
+    entries = await fs.promises.readdir(config.thumbsDir);
+  } catch {
+    return; // dir doesn't exist yet — nothing to clear
+  }
+  await Promise.all(
+    entries
+      .filter((name) => name.endsWith(".webp"))
+      .map((name) =>
+        fs.promises.rm(path.join(config.thumbsDir, name)).catch(() => {})
+      )
+  );
+}

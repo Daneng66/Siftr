@@ -1,7 +1,8 @@
 import crypto from "node:crypto";
+import type { Response } from "express";
 import { getDb } from "../db";
 
-export type JobType = "scan" | "dedup";
+export type JobType = "scan" | "dedup" | "thumb";
 export type JobStatus = "running" | "completed" | "failed";
 
 export interface Job {
@@ -23,9 +24,30 @@ export interface Job {
  */
 class JobManager {
   private active = new Map<JobType, string>();
+  private sseClients = new Set<Response>();
 
   isRunning(type: JobType): boolean {
     return this.active.has(type);
+  }
+
+  snapshot() {
+    return {
+      jobs: this.recent(),
+      scanRunning: this.isRunning("scan"),
+      dedupRunning: this.isRunning("dedup"),
+      thumbRunning: this.isRunning("thumb"),
+    };
+  }
+
+  addSseClient(res: Response): () => void {
+    this.sseClients.add(res);
+    return () => this.sseClients.delete(res);
+  }
+
+  private broadcast(): void {
+    if (this.sseClients.size === 0) return;
+    const payload = `data: ${JSON.stringify(this.snapshot())}\n\n`;
+    for (const res of this.sseClients) res.write(payload);
   }
 
   /**
@@ -57,7 +79,9 @@ class JobManager {
       )
       .run(id, type, message);
     this.active.set(type, id);
-    return this.get(id)!;
+    const job = this.get(id)!;
+    this.broadcast();
+    return job;
   }
 
   update(
@@ -78,6 +102,7 @@ class JobManager {
         fields.message ?? current.message,
         id
       );
+    this.broadcast();
   }
 
   finish(id: string, type: JobType, error?: string): void {
@@ -89,6 +114,7 @@ class JobManager {
       )
       .run(error ? "failed" : "completed", error ?? null, id);
     if (this.active.get(type) === id) this.active.delete(type);
+    this.broadcast();
   }
 
   get(id: string): Job | undefined {

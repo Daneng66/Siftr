@@ -63,6 +63,9 @@ export function getDb(): Database.Database {
   db.pragma("journal_mode = WAL");
   db.pragma("foreign_keys = ON");
   db.pragma("synchronous = NORMAL");
+  db.pragma("cache_size = -65536");   // 64 MB page cache
+  db.pragma("temp_store = MEMORY");
+  db.pragma("mmap_size = 268435456"); // 256 MB memory-mapped I/O
   db.exec(SCHEMA_SQL);
   migrate(db);
   dbInstance = db;

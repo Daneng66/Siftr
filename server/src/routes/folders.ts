@@ -49,5 +49,6 @@ foldersRouter.get("/", (_req, res) => {
   });
   folders.sort((a, b) => a.path.localeCompare(b.path, undefined, { numeric: true }));
 
+  res.setHeader("Cache-Control", "private, max-age=30");
   res.json({ folders });
 });

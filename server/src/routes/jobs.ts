@@ -2,15 +2,29 @@ import { Router } from "express";
 import { jobs } from "../jobs";
 import { scanLibrary } from "../scanner";
 import { runDedup } from "../dedup/czkawka";
+import { generateThumbnails } from "../scanner/thumbnails";
 
 export const jobsRouter = Router();
 
-/** GET /api/jobs — recent jobs for progress polling. */
+/** GET /api/jobs — current snapshot (kept for non-SSE consumers). */
 jobsRouter.get("/", (_req, res) => {
-  res.json({
-    jobs: jobs.recent(),
-    scanRunning: jobs.isRunning("scan"),
-    dedupRunning: jobs.isRunning("dedup"),
+  res.json(jobs.snapshot());
+});
+
+/** GET /api/jobs/stream — SSE stream of job state pushes. */
+jobsRouter.get("/stream", (req, res) => {
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
+  res.flushHeaders();
+  // Send current state immediately so the client doesn't wait for the first event.
+  res.write(`data: ${JSON.stringify(jobs.snapshot())}\n\n`);
+  const removeClient = jobs.addSseClient(res);
+  const heartbeat = setInterval(() => res.write(": heartbeat\n\n"), 25_000);
+  req.on("close", () => {
+    clearInterval(heartbeat);
+    removeClient();
   });
 });
 
@@ -37,12 +51,12 @@ scanRouter.post("/", (req, res) => {
   // Fire and forget; progress for both passes is tracked via the jobs table.
   scanLibrary({ hard })
     .then((result) => {
-      // Only re-run the (expensive, full-directory) dedup when files actually
-      // changed — an unchanged scan leaves existing duplicate groups valid.
-      // A hard scan wipes the library, so `added` will be non-zero there too.
       const changed = result.added + result.updated + result.removed > 0;
-      // Skip if a dedup is already in flight (e.g. an independent scan).
-      if (changed && !jobs.isRunning("dedup")) return runDedup();
+      if (changed && !jobs.isRunning("dedup"))
+        runDedup().catch((err) => console.error("[dedup] failed:", err));
+      generateThumbnails().catch((err) =>
+        console.error("[thumb] failed:", err)
+      );
     })
     .catch((err) => console.error("[scan] failed:", err));
   res.status(202).json({ started: true });

@@ -3,7 +3,7 @@ import type { PhotoSummary } from "../../lib/types";
 import { api } from "../../lib/api";
 import { formatBytes } from "../../lib/format";
 import { clsx } from "clsx";
-import { CheckIcon, CopyIcon, DownloadIcon } from "../ui/icons";
+import { CheckIcon, CopyIcon, DownloadIcon, ImagesIcon } from "../ui/icons";
 
 interface Props {
   photo: PhotoSummary;
@@ -30,12 +30,13 @@ function PhotoCardImpl({ photo, selected, onClick, onOpenDetail }: Props) {
           src={api.thumbnailUrl(photo.id)}
           alt={photo.current_filename}
           loading="lazy"
+          decoding="async"
           draggable={false}
           className="h-full w-full object-cover"
         />
       ) : (
-        <div className="flex h-full w-full items-center justify-center text-xs text-slate-400">
-          no preview
+        <div className="flex h-full w-full items-center justify-center">
+          <ImagesIcon className="text-3xl text-slate-300 dark:text-slate-600" />
         </div>
       )}
 

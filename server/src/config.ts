@@ -1,5 +1,6 @@
 import path from "node:path";
 import fs from "node:fs";
+import os from "node:os";
 
 /**
  * Central configuration, driven by environment variables so the same build runs
@@ -33,8 +34,10 @@ export const config = {
    */
   dedupSimilarEnabled: process.env.DEDUP_SIMILAR === "true",
 
-  /** How many photos to hash/thumbnail in parallel during a scan. */
-  scanConcurrency: Number(process.env.SCAN_CONCURRENCY ?? 4),
+  /** How many photos to process in parallel during a scan. Defaults to half the CPU count, minimum 4. */
+  scanConcurrency: Number(
+    process.env.SCAN_CONCURRENCY ?? Math.max(4, Math.floor(os.cpus().length / 2))
+  ),
   thumbSize: Number(process.env.THUMB_SIZE ?? 256),
 
   /** Run an automatic scan of the photos directory on startup. */

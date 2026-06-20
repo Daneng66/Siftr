@@ -51,8 +51,9 @@ export function TopNav() {
   const { data: jobsData } = useJobs(true);
   const scanRunning = jobsData?.scanRunning ?? false;
   const dedupRunning = jobsData?.dedupRunning ?? false;
+  const thumbRunning = jobsData?.thumbRunning ?? false;
   const activeJob =
-    (scanRunning || dedupRunning)
+    (scanRunning || dedupRunning || thumbRunning)
       ? jobsData?.jobs.find((j) => j.status === "running")
       : undefined;
 

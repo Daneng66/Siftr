@@ -60,30 +60,51 @@ export interface DuplicateMemberView {
 /** All duplicate groups with their member photo summaries, for the compare UI. */
 export function listGroups(kind?: DupKind) {
   const db = getDb();
-  const groups = (
-    kind
-      ? db
-          .prepare(
-            `SELECT * FROM duplicate_groups WHERE kind = ? ORDER BY id DESC`
-          )
-          .all(kind)
-      : db.prepare(`SELECT * FROM duplicate_groups ORDER BY id DESC`).all()
-  ) as Array<{ id: number; kind: DupKind; created_at: string }>;
+  // Single JOIN query instead of one query per group (N+1 → 1).
+  const sql = `
+    SELECT dg.id   AS group_id,
+           dg.kind, dg.created_at,
+           dm.photo_id, dm.status, dm.similarity,
+           p.current_filename, p.file_size, p.width, p.height,
+           p.thumbnail_path, p.path
+      FROM duplicate_groups dg
+      JOIN duplicate_group_members dm ON dm.group_id = dg.id
+      JOIN photos p ON p.id = dm.photo_id
+      ${kind ? "WHERE dg.kind = ?" : ""}
+     ORDER BY dg.id DESC, p.file_size DESC`;
 
-  const memberStmt = db.prepare(
-    `SELECT dm.group_id, dm.photo_id, dm.status, dm.similarity,
-            p.current_filename, p.file_size, p.width, p.height,
-            p.thumbnail_path, p.path
-       FROM duplicate_group_members dm
-       JOIN photos p ON p.id = dm.photo_id
-      WHERE dm.group_id = ?
-      ORDER BY p.file_size DESC`
-  );
+  const rows = (kind ? db.prepare(sql).all(kind) : db.prepare(sql).all()) as Array<
+    { group_id: number; kind: DupKind; created_at: string } & DuplicateMemberView
+  >;
 
-  return groups.map((g) => ({
-    ...g,
-    members: memberStmt.all(g.id) as DuplicateMemberView[],
-  }));
+  // Reassemble groups in JS — preserves ORDER BY dg.id DESC ordering.
+  const groupMap = new Map<
+    number,
+    { id: number; kind: DupKind; created_at: string; members: DuplicateMemberView[] }
+  >();
+  for (const row of rows) {
+    if (!groupMap.has(row.group_id)) {
+      groupMap.set(row.group_id, {
+        id: row.group_id,
+        kind: row.kind,
+        created_at: row.created_at,
+        members: [],
+      });
+    }
+    groupMap.get(row.group_id)!.members.push({
+      group_id: row.group_id,
+      photo_id: row.photo_id,
+      status: row.status,
+      similarity: row.similarity,
+      current_filename: row.current_filename,
+      file_size: row.file_size,
+      width: row.width,
+      height: row.height,
+      thumbnail_path: row.thumbnail_path,
+      path: row.path,
+    });
+  }
+  return [...groupMap.values()];
 }
 
 export function setMemberStatus(

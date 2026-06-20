@@ -58,6 +58,7 @@ export interface JobsResponse {
   jobs: Job[];
   scanRunning: boolean;
   dedupRunning: boolean;
+  thumbRunning: boolean;
 }
 
 export type DupStatus = "kept" | "recommended" | "marked_for_deletion" | "ignored";

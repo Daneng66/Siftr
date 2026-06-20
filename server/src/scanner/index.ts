@@ -7,11 +7,14 @@ import { mapLimit } from "../util/concurrency";
 import { sha256File, dHash } from "../util/hash";
 import { relDir } from "../util/relpath";
 import { readExif } from "./exif";
-import { makeThumbnail, clearThumbnails } from "./thumbnails";
+import { clearThumbnails } from "./thumbnails";
 import {
+  batchDeletePhotos,
+  beginBatch,
   clearLibrary,
-  deletePhotoByPath,
+  commitBatch,
   getIndexedPaths,
+  rollbackBatch,
   upsertPhoto,
 } from "../db/photos";
 import { jobs } from "../jobs";
@@ -67,17 +70,19 @@ async function indexFile(filePath: string, stat: fs.Stats): Promise<void> {
     const meta = await sharp(filePath, { failOn: "none" }).metadata();
     width = meta.width ?? null;
     height = meta.height ?? null;
-    // account for EXIF orientation swapping dimensions
     if (meta.orientation && meta.orientation >= 5 && width && height) {
       [width, height] = [height, width];
     }
-    phash = await dHash(filePath);
+    // Only compute perceptual hash when similar-image dedup is enabled;
+    // it requires a full image decode per file and is wasted otherwise.
+    if (config.dedupSimilarEnabled) {
+      phash = await dHash(filePath);
+    }
   } catch {
     /* unreadable image — still index basic info */
   }
 
   const exif = await readExif(filePath);
-  const thumbnailPath = await makeThumbnail(filePath, fileHash);
   const filename = path.basename(filePath);
 
   upsertPhoto({
@@ -96,7 +101,7 @@ async function indexFile(filePath: string, stat: fs.Stats): Promise<void> {
     gps_lat: exif.gpsLat,
     gps_lon: exif.gpsLon,
     date_modified: new Date(stat.mtimeMs).toISOString(),
-    thumbnail_path: thumbnailPath,
+    thumbnail_path: null,
     rel_dir: relDir(filePath),
     mtime_ms: Math.floor(stat.mtimeMs),
     size_seen: stat.size,
@@ -112,6 +117,10 @@ export async function reindexFile(filePath: string): Promise<void> {
     /* file vanished — ignore */
   }
 }
+
+// Commit every N files. Large enough to amortise per-transaction fsync overhead
+// while keeping progress updates flowing to the UI between batches.
+const SCAN_BATCH_SIZE = 500;
 
 export interface ScanResult {
   scanned: number;
@@ -139,6 +148,7 @@ export async function scanLibrary(opts: ScanOptions = {}): Promise<ScanResult> {
     opts.hard ? "Hard scan: clearing data…" : "Scanning library…"
   );
   const result: ScanResult = { scanned: 0, added: 0, updated: 0, removed: 0 };
+  const startMs = Date.now();
   try {
     if (opts.hard) {
       clearLibrary();
@@ -150,43 +160,62 @@ export async function scanLibrary(opts: ScanOptions = {}): Promise<ScanResult> {
     let processed = 0;
     jobs.update(job.id, { total: files.length, message: "Indexing photos…" });
 
-    await mapLimit(files, config.scanConcurrency, async (file) => {
-      seen.add(file);
+    // Process files in chunks so each chunk commits as one transaction.
+    // Committing per-chunk (rather than per-file) removes ~99% of fsync
+    // overhead while still letting progress updates reach the UI after each
+    // batch commits.
+    for (let i = 0; i < files.length; i += SCAN_BATCH_SIZE) {
+      const chunk = files.slice(i, i + SCAN_BATCH_SIZE);
+      beginBatch();
       try {
-        const stat = await fsp.stat(file);
-        const prev = existing.get(file);
-        const unchanged =
-          prev &&
-          prev.mtime_ms === Math.floor(stat.mtimeMs) &&
-          prev.size_seen === stat.size;
-        if (!unchanged) {
-          await indexFile(file, stat);
-          if (prev) result.updated++;
-          else result.added++;
-        }
-        result.scanned++;
-      } catch {
-        /* skip unreadable file */
-      } finally {
-        processed++;
-        if (processed % 10 === 0 || processed === files.length) {
-          jobs.update(job.id, { progress: processed });
-        }
+        await mapLimit(chunk, config.scanConcurrency, async (file) => {
+          seen.add(file);
+          try {
+            const stat = await fsp.stat(file);
+            const prev = existing.get(file);
+            const unchanged =
+              prev &&
+              prev.mtime_ms === Math.floor(stat.mtimeMs) &&
+              prev.size_seen === stat.size;
+            if (!unchanged) {
+              await indexFile(file, stat);
+              if (prev) result.updated++;
+              else result.added++;
+            }
+            result.scanned++;
+          } catch {
+            /* skip unreadable file */
+          } finally {
+            processed++;
+          }
+        });
+        commitBatch();
+      } catch (err) {
+        rollbackBatch();
+        throw err;
       }
-    });
+      jobs.update(job.id, { progress: processed });
+    }
 
-    // Prune files that disappeared from disk.
+    // Prune files that disappeared from disk (single transaction).
+    const toDelete: string[] = [];
     for (const knownPath of existing.keys()) {
       if (!seen.has(knownPath)) {
-        deletePhotoByPath(knownPath);
+        toDelete.push(knownPath);
         result.removed++;
       }
     }
+    batchDeletePhotos(toDelete);
 
     jobs.update(job.id, {
       progress: files.length,
       message: `Added ${result.added}, updated ${result.updated}, removed ${result.removed}`,
     });
+    console.log(
+      `[scan] done in ${((Date.now() - startMs) / 1000).toFixed(1)}s — ` +
+      `added ${result.added}, updated ${result.updated}, removed ${result.removed}, ` +
+      `skipped ${result.scanned - result.added - result.updated}`
+    );
     jobs.finish(job.id, "scan");
     return result;
   } catch (err) {

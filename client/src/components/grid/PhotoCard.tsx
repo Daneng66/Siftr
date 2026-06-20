@@ -30,6 +30,7 @@ function PhotoCardImpl({ photo, selected, onClick, onOpenDetail }: Props) {
           src={api.thumbnailUrl(photo.id)}
           alt={photo.current_filename}
           loading="lazy"
+          decoding="async"
           draggable={false}
           className="h-full w-full object-cover"
         />

@@ -54,10 +54,11 @@ export function PhotoGrid({
     : MIN_CELL;
   const rowHeight = cellSize + GAP;
 
+  const estimateSize = useCallback(() => rowHeight, [rowHeight]);
   const rowVirtualizer = useVirtualizer({
     count: rowCount,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => rowHeight,
+    estimateSize,
     overscan: 4,
   });
 
@@ -92,22 +93,19 @@ export function PhotoGrid({
     startY: number;
     base: number[];
   } | null>(null);
+  // Snapshot of visible card rects taken once at drag-start so hit-testing
+  // on mousemove reads from a plain array instead of querying the DOM.
+  const cardRectsRef = useRef<Array<{ id: number; rect: DOMRect }>>([]);
 
   const hitTest = useCallback((rect: Marquee) => {
-    const el = parentRef.current;
-    if (!el) return [];
-    const cards = el.querySelectorAll<HTMLElement>("[data-photo-id]");
-    const ids: number[] = [];
-    cards.forEach((card) => {
-      const r = card.getBoundingClientRect();
-      const intersects =
+    return cardRectsRef.current
+      .filter(({ rect: r }) =>
         r.left < rect.x + rect.w &&
         r.right > rect.x &&
         r.top < rect.y + rect.h &&
-        r.bottom > rect.y;
-      if (intersects) ids.push(Number(card.dataset.photoId));
-    });
-    return ids;
+        r.bottom > rect.y
+      )
+      .map(({ id }) => id);
   }, []);
 
   const onMouseDown = useCallback(
@@ -115,6 +113,16 @@ export function PhotoGrid({
       // Only start a marquee from empty space (not when clicking a card).
       if ((e.target as HTMLElement).closest("[data-photo-id]")) return;
       if (e.button !== 0) return;
+      // Snapshot card positions once so mousemove doesn't touch the DOM.
+      const el = parentRef.current;
+      if (el) {
+        cardRectsRef.current = Array.from(
+          el.querySelectorAll<HTMLElement>("[data-photo-id]")
+        ).map((card) => ({
+          id: Number(card.dataset.photoId),
+          rect: card.getBoundingClientRect(),
+        }));
+      }
       const additive = e.ctrlKey || e.metaKey;
       dragRef.current = {
         startX: e.clientX,

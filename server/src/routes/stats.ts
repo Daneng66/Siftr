@@ -3,24 +3,33 @@ import { getDb } from "../db";
 
 export const statsRouter = Router();
 
+// In-memory TTL cache — stats are relatively stable and queried frequently
+// (sidebar polls after every invalidation). Avoids re-running the CTE on
+// every request while keeping data fresh enough for practical use.
+let _statsCache: { data: unknown; expiresAt: number } | null = null;
+const STATS_TTL_MS = 10_000;
+
+export function invalidateStatsCache(): void {
+  _statsCache = null;
+}
+
 /** GET /api/stats — library summary for the sidebar. */
 statsRouter.get("/", (_req, res) => {
+  const now = Date.now();
+  if (_statsCache && now < _statsCache.expiresAt) {
+    return res.json(_statsCache.data);
+  }
+
   const db = getDb();
-  const photos = (db.prepare(`SELECT COUNT(*) AS n FROM photos`).get() as {
-    n: number;
-  }).n;
+  const photos = (db.prepare(`SELECT COUNT(*) AS n FROM photos`).get() as { n: number }).n;
   const totalSize = (
-    db.prepare(`SELECT COALESCE(SUM(file_size),0) AS n FROM photos`).get() as {
-      n: number;
-    }
+    db.prepare(`SELECT COALESCE(SUM(file_size),0) AS n FROM photos`).get() as { n: number }
   ).n;
   const folders = (
     db
       .prepare(`SELECT COUNT(DISTINCT rel_dir) AS n FROM photos WHERE rel_dir <> ''`)
       .get() as { n: number }
   ).n;
-  // Redundant copies and the storage they occupy: per group we assume one copy
-  // is kept (the largest), so the rest are reclaimable if removed.
   const dup = db
     .prepare(
       `WITH g AS (
@@ -37,11 +46,14 @@ statsRouter.get("/", (_req, res) => {
     )
     .get() as { count: number; size: number };
 
-  res.json({
+  const data = {
     photos,
     totalSize,
     folders,
     duplicateCount: dup.count,
     reclaimableSize: dup.size,
-  });
+  };
+
+  _statsCache = { data, expiresAt: now + STATS_TTL_MS };
+  res.json(data);
 });

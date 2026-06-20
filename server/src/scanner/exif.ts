@@ -19,7 +19,7 @@ function toIso(value: unknown): string | null {
   return null;
 }
 
-/** Read the subset of EXIF we index. Tolerant of files with no metadata. */
+/** Read the subset of EXIF we index. Single parse covers both tags and GPS. */
 export async function readExif(filePath: string): Promise<ExifInfo> {
   const info: ExifInfo = {
     dateTaken: null,
@@ -30,8 +30,10 @@ export async function readExif(filePath: string): Promise<ExifInfo> {
   };
 
   try {
+    // gps: true makes exifr emit decimal `latitude`/`longitude` alongside tags.
     const tags = await exifr.parse(filePath, {
       pick: ["DateTimeOriginal", "CreateDate", "ModifyDate", "Make", "Model"],
+      gps: true,
     });
     if (tags) {
       info.dateTaken =
@@ -40,19 +42,13 @@ export async function readExif(filePath: string): Promise<ExifInfo> {
         toIso(tags.ModifyDate);
       info.cameraMake = tags.Make ? String(tags.Make).trim() : null;
       info.cameraModel = tags.Model ? String(tags.Model).trim() : null;
+      if (typeof tags.latitude === "number") {
+        info.gpsLat = tags.latitude;
+        info.gpsLon = typeof tags.longitude === "number" ? tags.longitude : null;
+      }
     }
   } catch {
     /* no/unsupported EXIF — leave nulls */
-  }
-
-  try {
-    const gps = await exifr.gps(filePath);
-    if (gps && typeof gps.latitude === "number") {
-      info.gpsLat = gps.latitude;
-      info.gpsLon = gps.longitude;
-    }
-  } catch {
-    /* no GPS */
   }
 
   return info;

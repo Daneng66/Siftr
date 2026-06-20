@@ -73,7 +73,11 @@ async function indexFile(filePath: string, stat: fs.Stats): Promise<void> {
     if (meta.orientation && meta.orientation >= 5 && width && height) {
       [width, height] = [height, width];
     }
-    phash = await dHash(filePath);
+    // Only compute perceptual hash when similar-image dedup is enabled;
+    // it requires a full image decode per file and is wasted otherwise.
+    if (config.dedupSimilarEnabled) {
+      phash = await dHash(filePath);
+    }
   } catch {
     /* unreadable image — still index basic info */
   }
@@ -114,9 +118,9 @@ export async function reindexFile(filePath: string): Promise<void> {
   }
 }
 
-// Number of files to upsert per SQLite transaction. Large enough to amortise
-// per-transaction overhead while keeping progress updates flowing to the UI.
-const SCAN_BATCH_SIZE = 100;
+// Commit every N files. Large enough to amortise per-transaction fsync overhead
+// while keeping progress updates flowing to the UI between batches.
+const SCAN_BATCH_SIZE = 500;
 
 export interface ScanResult {
   scanned: number;
@@ -144,6 +148,7 @@ export async function scanLibrary(opts: ScanOptions = {}): Promise<ScanResult> {
     opts.hard ? "Hard scan: clearing data…" : "Scanning library…"
   );
   const result: ScanResult = { scanned: 0, added: 0, updated: 0, removed: 0 };
+  const startMs = Date.now();
   try {
     if (opts.hard) {
       clearLibrary();
@@ -206,6 +211,11 @@ export async function scanLibrary(opts: ScanOptions = {}): Promise<ScanResult> {
       progress: files.length,
       message: `Added ${result.added}, updated ${result.updated}, removed ${result.removed}`,
     });
+    console.log(
+      `[scan] done in ${((Date.now() - startMs) / 1000).toFixed(1)}s — ` +
+      `added ${result.added}, updated ${result.updated}, removed ${result.removed}, ` +
+      `skipped ${result.scanned - result.added - result.updated}`
+    );
     jobs.finish(job.id, "scan");
     return result;
   } catch (err) {

@@ -48,7 +48,7 @@ photosRouter.get("/", (req, res) => {
   }
   if (q.duplicatesOnly) {
     where.push(
-      "EXISTS (SELECT 1 FROM duplicate_group_members dm WHERE dm.photo_id = p.id)"
+      "EXISTS (SELECT 1 FROM duplicate_group_members dgm WHERE dgm.photo_id = p.id)"
     );
   }
   if (q.search) {
@@ -65,14 +65,17 @@ photosRouter.get("/", (req, res) => {
       .get(params) as { n: number }
   ).n;
 
+  // LEFT JOIN + GROUP BY instead of a correlated subquery per row.
   const items = db
     .prepare(
       `SELECT p.id, p.current_filename, p.file_size, p.width, p.height,
               p.mime_type, p.exif_date_taken, p.thumbnail_path,
               p.rel_dir,
-              (SELECT COUNT(*) FROM duplicate_group_members dm WHERE dm.photo_id = p.id) AS dup_count
+              COUNT(dm.photo_id) AS dup_count
          FROM photos p
+         LEFT JOIN duplicate_group_members dm ON dm.photo_id = p.id
          ${whereSql}
+         GROUP BY p.id
         ORDER BY ${SORT_SQL[q.sort]}
         LIMIT @limit OFFSET @offset`
     )

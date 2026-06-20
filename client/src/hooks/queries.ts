@@ -30,6 +30,7 @@ export function useInfinitePhotos(
       const loaded = allPages.reduce((n, p) => n + p.items.length, 0);
       return loaded < lastPage.total ? loaded : undefined;
     },
+    staleTime: 30_000,
   });
 }
 
@@ -45,7 +46,7 @@ export function useJobs(enabled: boolean) {
   return useQuery({
     queryKey: ["jobs"],
     queryFn: api.jobs,
-    refetchInterval: enabled ? 1500 : false,
+    refetchInterval: enabled ? 3500 : false,
   });
 }
 

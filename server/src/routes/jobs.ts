@@ -6,13 +6,25 @@ import { generateThumbnails } from "../scanner/thumbnails";
 
 export const jobsRouter = Router();
 
-/** GET /api/jobs — recent jobs for progress polling. */
+/** GET /api/jobs — current snapshot (kept for non-SSE consumers). */
 jobsRouter.get("/", (_req, res) => {
-  res.json({
-    jobs: jobs.recent(),
-    scanRunning: jobs.isRunning("scan"),
-    dedupRunning: jobs.isRunning("dedup"),
-    thumbRunning: jobs.isRunning("thumb"),
+  res.json(jobs.snapshot());
+});
+
+/** GET /api/jobs/stream — SSE stream of job state pushes. */
+jobsRouter.get("/stream", (req, res) => {
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
+  res.flushHeaders();
+  // Send current state immediately so the client doesn't wait for the first event.
+  res.write(`data: ${JSON.stringify(jobs.snapshot())}\n\n`);
+  const removeClient = jobs.addSseClient(res);
+  const heartbeat = setInterval(() => res.write(": heartbeat\n\n"), 25_000);
+  req.on("close", () => {
+    clearInterval(heartbeat);
+    removeClient();
   });
 });
 

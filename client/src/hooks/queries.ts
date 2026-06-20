@@ -3,9 +3,10 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { api, type PhotoQuery } from "../lib/api";
 import { filterToQuery } from "../store/ui";
-import type { FilterState } from "../lib/types";
+import type { FilterState, JobsResponse } from "../lib/types";
 
 const PAGE_SIZE = 200;
 
@@ -42,11 +43,20 @@ export function useFolders() {
   return useQuery({ queryKey: ["folders"], queryFn: api.folders });
 }
 
-export function useJobs(enabled: boolean) {
-  return useQuery({
+export function useJobs(_enabled: boolean) {
+  const qc = useQueryClient();
+  useEffect(() => {
+    const es = new EventSource("/api/jobs/stream");
+    es.onmessage = (e: MessageEvent) => {
+      qc.setQueryData(["jobs"], JSON.parse(e.data) as JobsResponse);
+    };
+    return () => es.close();
+  }, [qc]);
+  return useQuery<JobsResponse>({
     queryKey: ["jobs"],
     queryFn: api.jobs,
-    refetchInterval: enabled ? 3500 : false,
+    staleTime: Infinity,
+    gcTime: Infinity,
   });
 }
 

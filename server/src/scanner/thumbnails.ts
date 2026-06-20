@@ -11,15 +11,14 @@ import {
 } from "../db/photos";
 
 /**
- * Generate a WebP thumbnail for a file, named by its hash so identical files
- * share one thumbnail. Returns the filename (relative to thumbsDir), or null
- * on failure.
+ * Generate a WebP thumbnail for a file, named by photo ID. Returns the
+ * filename (relative to thumbsDir), or null on failure.
  */
 export async function makeThumbnail(
   filePath: string,
-  fileHash: string
+  id: number
 ): Promise<string | null> {
-  const name = `${fileHash}.webp`;
+  const name = `${id}.webp`;
   const out = path.join(config.thumbsDir, name);
   try {
     // Reuse an existing, non-empty thumbnail — duplicates share one file by
@@ -33,7 +32,7 @@ export async function makeThumbnail(
     // finished thumbnail — which then gets cached by the browser for a day.
     const tmp = path.join(
       config.thumbsDir,
-      `.${fileHash}.${process.pid}.${randomUUID()}.tmp`
+      `.${id}.${process.pid}.${randomUUID()}.tmp`
     );
     try {
       await sharp(filePath, { failOn: "none" })
@@ -103,7 +102,7 @@ export async function generateThumbnails(): Promise<void> {
   try {
     await mapLimit(photos, config.scanConcurrency, async (photo) => {
       try {
-        const thumbPath = await makeThumbnail(photo.path, photo.file_hash);
+        const thumbPath = await makeThumbnail(photo.path, photo.id);
         if (thumbPath) updateThumbnailPath(photo.id, thumbPath);
       } catch {
         /* skip unprocessable photo */

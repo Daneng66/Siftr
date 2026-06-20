@@ -185,13 +185,22 @@ export function clearLibrary(): void {
 export function getPhotosNeedingThumbnails(): Array<{
   id: number;
   path: string;
-  file_hash: string;
 }> {
   return getDb()
     .prepare(
-      `SELECT id, path, file_hash FROM photos WHERE thumbnail_path IS NULL ORDER BY id`
+      `SELECT id, path FROM photos WHERE thumbnail_path IS NULL ORDER BY id`
     )
-    .all() as Array<{ id: number; path: string; file_hash: string }>;
+    .all() as Array<{ id: number; path: string }>;
+}
+
+/** Bulk-write file hashes obtained from czkawka's dup output (path → hash). */
+export function bulkUpdateFileHashes(entries: Array<{ path: string; hash: string }>): void {
+  if (entries.length === 0) return;
+  const db = getDb();
+  const stmt = db.prepare(`UPDATE photos SET file_hash = ? WHERE path = ?`);
+  db.transaction(() => {
+    for (const { path, hash } of entries) stmt.run(hash, path);
+  })();
 }
 
 export function updateThumbnailPath(id: number, thumbnailPath: string | null): void {

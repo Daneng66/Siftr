@@ -6,8 +6,8 @@ import { getDb } from "../db";
 import { getPhotoById, updateThumbnailPath } from "../db/photos";
 import { makeThumbnail, thumbnailAbsPath } from "../scanner/thumbnails";
 
-// Keyed by file_hash so exact duplicates share one generation promise.
-const thumbInFlight = new Map<string, Promise<string | null>>();
+// Keyed by photo ID — deduplicates concurrent requests for the same photo.
+const thumbInFlight = new Map<number, Promise<string | null>>();
 
 export const photosRouter = Router();
 
@@ -104,18 +104,13 @@ photosRouter.get("/:id/thumbnail", async (req, res) => {
   let thumbPath = photo.thumbnail_path;
 
   if (!thumbPath) {
-    if (!photo.file_hash) return res.status(404).json({ error: "no thumbnail" });
-
-    // Keyed by file_hash: exact duplicates share one generation promise so
-    // only a single sharp process runs even if many requests arrive at once.
-    let gen = thumbInFlight.get(photo.file_hash);
+    let gen = thumbInFlight.get(id);
     if (!gen) {
-      gen = makeThumbnail(photo.path, photo.file_hash)
-        .finally(() => thumbInFlight.delete(photo.file_hash!));
-      thumbInFlight.set(photo.file_hash, gen);
+      gen = makeThumbnail(photo.path, id)
+        .finally(() => thumbInFlight.delete(id));
+      thumbInFlight.set(id, gen);
     }
     thumbPath = await gen;
-    // Each photo ID gets its own DB record updated (duplicates share the file).
     if (thumbPath) updateThumbnailPath(id, thumbPath);
   }
 

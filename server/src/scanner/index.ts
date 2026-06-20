@@ -4,7 +4,7 @@ import path from "node:path";
 import sharp from "sharp";
 import { config, IMAGE_EXTENSIONS } from "../config";
 import { mapLimit } from "../util/concurrency";
-import { sha256File, dHash } from "../util/hash";
+import { dHash } from "../util/hash";
 import { relDir } from "../util/relpath";
 import { readExif } from "./exif";
 import { clearThumbnails } from "./thumbnails";
@@ -61,7 +61,6 @@ async function walk(dir: string): Promise<string[]> {
 
 async function indexFile(filePath: string, stat: fs.Stats): Promise<void> {
   const ext = path.extname(filePath).toLowerCase();
-  const fileHash = await sha256File(filePath);
 
   let width: number | null = null;
   let height: number | null = null;
@@ -89,7 +88,7 @@ async function indexFile(filePath: string, stat: fs.Stats): Promise<void> {
     path: filePath,
     original_filename: filename,
     current_filename: filename,
-    file_hash: fileHash,
+    file_hash: null,  // populated by czkawka dup after scan
     perceptual_hash: phash,
     file_size: stat.size,
     width,

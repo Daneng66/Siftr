@@ -7,7 +7,7 @@ import { mapLimit } from "../util/concurrency";
 import { sha256File, dHash } from "../util/hash";
 import { relDir } from "../util/relpath";
 import { readExif } from "./exif";
-import { makeThumbnailFromBuf, clearThumbnails } from "./thumbnails";
+import { clearThumbnails } from "./thumbnails";
 import {
   batchDeletePhotos,
   beginBatch,
@@ -66,31 +66,14 @@ async function indexFile(filePath: string, stat: fs.Stats): Promise<void> {
   let width: number | null = null;
   let height: number | null = null;
   let phash: string | null = null;
-  let thumbnailPath: string | null = null;
   try {
-    // Header-only read for original dimensions (no full decode).
     const meta = await sharp(filePath, { failOn: "none" }).metadata();
     width = meta.width ?? null;
     height = meta.height ?? null;
     if (meta.orientation && meta.orientation >= 5 && width && height) {
       [width, height] = [height, width];
     }
-
-    // Single full decode: apply EXIF rotation and resize to thumbnail size.
-    // The resulting buffer is reused for both dHash and thumbnail encoding,
-    // avoiding a second full decode of the original file.
-    const buf = await sharp(filePath, { failOn: "none" })
-      .rotate()
-      .resize(config.thumbSize, config.thumbSize, {
-        fit: "inside",
-        withoutEnlargement: true,
-      })
-      .toBuffer();
-
-    [phash, thumbnailPath] = await Promise.all([
-      dHash(buf),
-      makeThumbnailFromBuf(buf, fileHash),
-    ]);
+    phash = await dHash(filePath);
   } catch {
     /* unreadable image — still index basic info */
   }
@@ -114,7 +97,7 @@ async function indexFile(filePath: string, stat: fs.Stats): Promise<void> {
     gps_lat: exif.gpsLat,
     gps_lon: exif.gpsLon,
     date_modified: new Date(stat.mtimeMs).toISOString(),
-    thumbnail_path: thumbnailPath,
+    thumbnail_path: null,
     rel_dir: relDir(filePath),
     mtime_ms: Math.floor(stat.mtimeMs),
     size_seen: stat.size,

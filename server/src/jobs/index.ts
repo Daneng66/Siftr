@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import { getDb } from "../db";
 
-export type JobType = "scan" | "dedup";
+export type JobType = "scan" | "dedup" | "thumb";
 export type JobStatus = "running" | "completed" | "failed";
 
 export interface Job {

@@ -9,6 +9,7 @@ import { config, ensureDataDirs } from "./config";
 import { getDb } from "./db";
 import { apiRouter } from "./routes";
 import { scanLibrary } from "./scanner";
+import { generateThumbnails } from "./scanner/thumbnails";
 import { jobs } from "./jobs";
 import { ZodError } from "zod";
 
@@ -75,7 +76,9 @@ function main() {
 
   if (config.scanOnStartup && !jobs.isRunning("scan")) {
     console.log("Starting initial library scan…");
-    scanLibrary().catch((err) => console.error("[scan] startup failed:", err));
+    scanLibrary()
+      .then(() => generateThumbnails())
+      .catch((err) => console.error("[scan] startup failed:", err));
   }
 }
 

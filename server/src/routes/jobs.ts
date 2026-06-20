@@ -2,6 +2,7 @@ import { Router } from "express";
 import { jobs } from "../jobs";
 import { scanLibrary } from "../scanner";
 import { runDedup } from "../dedup/czkawka";
+import { generateThumbnails } from "../scanner/thumbnails";
 
 export const jobsRouter = Router();
 
@@ -11,6 +12,7 @@ jobsRouter.get("/", (_req, res) => {
     jobs: jobs.recent(),
     scanRunning: jobs.isRunning("scan"),
     dedupRunning: jobs.isRunning("dedup"),
+    thumbRunning: jobs.isRunning("thumb"),
   });
 });
 
@@ -37,12 +39,12 @@ scanRouter.post("/", (req, res) => {
   // Fire and forget; progress for both passes is tracked via the jobs table.
   scanLibrary({ hard })
     .then((result) => {
-      // Only re-run the (expensive, full-directory) dedup when files actually
-      // changed — an unchanged scan leaves existing duplicate groups valid.
-      // A hard scan wipes the library, so `added` will be non-zero there too.
       const changed = result.added + result.updated + result.removed > 0;
-      // Skip if a dedup is already in flight (e.g. an independent scan).
-      if (changed && !jobs.isRunning("dedup")) return runDedup();
+      if (changed && !jobs.isRunning("dedup"))
+        runDedup().catch((err) => console.error("[dedup] failed:", err));
+      generateThumbnails().catch((err) =>
+        console.error("[thumb] failed:", err)
+      );
     })
     .catch((err) => console.error("[scan] failed:", err));
   res.status(202).json({ started: true });

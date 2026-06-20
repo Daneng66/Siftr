@@ -50,6 +50,7 @@ export interface PhotoUpsert {
 // Lazily cached prepared statements — avoids re-compiling SQL on every call.
 let _upsertStmt: Database.Statement | null = null;
 let _deleteByPathStmt: Database.Statement | null = null;
+let _updateThumbStmt: Database.Statement | null = null;
 
 function getUpsertStmt(): Database.Statement {
   return (_upsertStmt ??= getDb().prepare(
@@ -179,6 +180,24 @@ export function clearLibrary(): void {
     db.prepare(`DELETE FROM photos`).run();
   });
   clear();
+}
+
+export function getPhotosNeedingThumbnails(): Array<{
+  id: number;
+  path: string;
+  file_hash: string;
+}> {
+  return getDb()
+    .prepare(
+      `SELECT id, path, file_hash FROM photos WHERE thumbnail_path IS NULL ORDER BY id`
+    )
+    .all() as Array<{ id: number; path: string; file_hash: string }>;
+}
+
+export function updateThumbnailPath(id: number, thumbnailPath: string): void {
+  (_updateThumbStmt ??= getDb().prepare(
+    `UPDATE photos SET thumbnail_path = ? WHERE id = ?`
+  )).run(thumbnailPath, id);
 }
 
 export function countPhotos(): number {

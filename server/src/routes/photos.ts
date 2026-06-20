@@ -98,7 +98,17 @@ photosRouter.get("/:id/thumbnail", (req, res) => {
   if (!photo?.thumbnail_path)
     return res.status(404).json({ error: "no thumbnail" });
   const abs = thumbnailAbsPath(photo.thumbnail_path);
-  if (!fs.existsSync(abs))
+  // A 0-byte file means generation is still in flight (or was interrupted).
+  // Don't serve it — and crucially don't let the browser cache an empty body
+  // for a day. Returning 404 with no long-lived cache lets the next request
+  // self-heal once the thumbnail is written.
+  let size = -1;
+  try {
+    size = fs.statSync(abs).size;
+  } catch {
+    /* missing — handled below */
+  }
+  if (size <= 0)
     return res.status(404).json({ error: "thumbnail missing" });
   res.setHeader("Cache-Control", "public, max-age=86400");
   res.sendFile(abs);

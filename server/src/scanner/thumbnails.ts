@@ -1,5 +1,6 @@
 import path from "node:path";
 import fs from "node:fs";
+import { randomUUID } from "node:crypto";
 import sharp from "sharp";
 import { config } from "../config";
 import { mapLimit } from "../util/concurrency";
@@ -21,7 +22,20 @@ export async function makeThumbnail(
   const name = `${fileHash}.webp`;
   const out = path.join(config.thumbsDir, name);
   try {
-    if (!fs.existsSync(out)) {
+    // Reuse an existing, non-empty thumbnail — duplicates share one file by
+    // hash. A 0-byte file means a previous run was interrupted mid-write, so
+    // treat it as missing and regenerate.
+    if (existsNonEmpty(out)) return name;
+
+    // Write to a unique temp file, then atomically rename into place. Without
+    // this, a concurrent worker (or an HTTP request) could observe the final
+    // path while sharp is still flushing bytes and treat a 0-byte file as a
+    // finished thumbnail — which then gets cached by the browser for a day.
+    const tmp = path.join(
+      config.thumbsDir,
+      `.${fileHash}.${process.pid}.${randomUUID()}.tmp`
+    );
+    try {
       await sharp(filePath, { failOn: "none" })
         .rotate()
         .resize(config.thumbSize, config.thumbSize, {
@@ -29,11 +43,24 @@ export async function makeThumbnail(
           withoutEnlargement: true,
         })
         .webp({ quality: 78 })
-        .toFile(out);
+        .toFile(tmp);
+      await fs.promises.rename(tmp, out);
+    } catch (err) {
+      await fs.promises.rm(tmp, { force: true }).catch(() => {});
+      throw err;
     }
     return name;
   } catch {
     return null;
+  }
+}
+
+/** True if the path exists and has a non-zero size. */
+function existsNonEmpty(p: string): boolean {
+  try {
+    return fs.statSync(p).size > 0;
+  } catch {
+    return false;
   }
 }
 

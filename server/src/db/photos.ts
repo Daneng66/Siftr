@@ -1,3 +1,4 @@
+import type Database from "better-sqlite3";
 import { getDb } from "./index";
 
 export interface PhotoRow {
@@ -46,41 +47,79 @@ export interface PhotoUpsert {
   size_seen: number;
 }
 
+// Lazily cached prepared statements — avoids re-compiling SQL on every call.
+let _upsertStmt: Database.Statement | null = null;
+let _deleteByPathStmt: Database.Statement | null = null;
+
+function getUpsertStmt(): Database.Statement {
+  return (_upsertStmt ??= getDb().prepare(
+    `INSERT INTO photos (
+       path, original_filename, current_filename, file_hash, perceptual_hash,
+       file_size, width, height, mime_type, exif_date_taken, exif_camera_make,
+       exif_camera_model, gps_lat, gps_lon, date_modified, thumbnail_path,
+       rel_dir, mtime_ms, size_seen
+     ) VALUES (
+       @path, @original_filename, @current_filename, @file_hash, @perceptual_hash,
+       @file_size, @width, @height, @mime_type, @exif_date_taken, @exif_camera_make,
+       @exif_camera_model, @gps_lat, @gps_lon, @date_modified, @thumbnail_path,
+       @rel_dir, @mtime_ms, @size_seen
+     )
+     ON CONFLICT(path) DO UPDATE SET
+       current_filename = excluded.current_filename,
+       file_hash        = excluded.file_hash,
+       perceptual_hash  = excluded.perceptual_hash,
+       file_size        = excluded.file_size,
+       width            = excluded.width,
+       height           = excluded.height,
+       mime_type        = excluded.mime_type,
+       exif_date_taken  = excluded.exif_date_taken,
+       exif_camera_make = excluded.exif_camera_make,
+       exif_camera_model= excluded.exif_camera_model,
+       gps_lat          = excluded.gps_lat,
+       gps_lon          = excluded.gps_lon,
+       date_modified    = excluded.date_modified,
+       thumbnail_path   = excluded.thumbnail_path,
+       rel_dir          = excluded.rel_dir,
+       mtime_ms         = excluded.mtime_ms,
+       size_seen        = excluded.size_seen`
+  ));
+}
+
 /** Insert or update a photo keyed by its filesystem path. */
 export function upsertPhoto(p: PhotoUpsert): void {
-  getDb()
-    .prepare(
-      `INSERT INTO photos (
-         path, original_filename, current_filename, file_hash, perceptual_hash,
-         file_size, width, height, mime_type, exif_date_taken, exif_camera_make,
-         exif_camera_model, gps_lat, gps_lon, date_modified, thumbnail_path,
-         rel_dir, mtime_ms, size_seen
-       ) VALUES (
-         @path, @original_filename, @current_filename, @file_hash, @perceptual_hash,
-         @file_size, @width, @height, @mime_type, @exif_date_taken, @exif_camera_make,
-         @exif_camera_model, @gps_lat, @gps_lon, @date_modified, @thumbnail_path,
-         @rel_dir, @mtime_ms, @size_seen
-       )
-       ON CONFLICT(path) DO UPDATE SET
-         current_filename = excluded.current_filename,
-         file_hash        = excluded.file_hash,
-         perceptual_hash  = excluded.perceptual_hash,
-         file_size        = excluded.file_size,
-         width            = excluded.width,
-         height           = excluded.height,
-         mime_type        = excluded.mime_type,
-         exif_date_taken  = excluded.exif_date_taken,
-         exif_camera_make = excluded.exif_camera_make,
-         exif_camera_model= excluded.exif_camera_model,
-         gps_lat          = excluded.gps_lat,
-         gps_lon          = excluded.gps_lon,
-         date_modified    = excluded.date_modified,
-         thumbnail_path   = excluded.thumbnail_path,
-         rel_dir          = excluded.rel_dir,
-         mtime_ms         = excluded.mtime_ms,
-         size_seen        = excluded.size_seen`
-    )
-    .run(p);
+  getUpsertStmt().run(p);
+}
+
+/**
+ * Begin an explicit write transaction. Use with commitBatch/rollbackBatch when
+ * async work (indexFile calls) must happen between begin and commit — the
+ * better-sqlite3 db.transaction() helper only works for synchronous functions.
+ */
+export function beginBatch(): void {
+  getDb().exec("BEGIN");
+}
+
+export function commitBatch(): void {
+  getDb().exec("COMMIT");
+}
+
+export function rollbackBatch(): void {
+  try {
+    getDb().exec("ROLLBACK");
+  } catch {
+    // no-op if no transaction is open
+  }
+}
+
+/** Delete multiple photos by path in a single transaction. */
+export function batchDeletePhotos(paths: string[]): void {
+  if (paths.length === 0) return;
+  const db = getDb();
+  _deleteByPathStmt ??= db.prepare(`DELETE FROM photos WHERE path = ?`);
+  const stmt = _deleteByPathStmt;
+  db.transaction(() => {
+    for (const p of paths) stmt.run(p);
+  })();
 }
 
 export function getIndexedPaths(): Map<
@@ -117,7 +156,7 @@ export function getPhotoByPath(path: string): PhotoRow | undefined {
 }
 
 export function deletePhotoByPath(path: string): void {
-  getDb().prepare(`DELETE FROM photos WHERE path = ?`).run(path);
+  (_deleteByPathStmt ??= getDb().prepare(`DELETE FROM photos WHERE path = ?`)).run(path);
 }
 
 export function deletePhotoById(id: number): void {

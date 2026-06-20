@@ -9,9 +9,12 @@ import { relDir } from "../util/relpath";
 import { readExif } from "./exif";
 import { makeThumbnail, clearThumbnails } from "./thumbnails";
 import {
+  batchDeletePhotos,
+  beginBatch,
   clearLibrary,
-  deletePhotoByPath,
+  commitBatch,
   getIndexedPaths,
+  rollbackBatch,
   upsertPhoto,
 } from "../db/photos";
 import { jobs } from "../jobs";
@@ -113,6 +116,10 @@ export async function reindexFile(filePath: string): Promise<void> {
   }
 }
 
+// Number of files to upsert per SQLite transaction. Large enough to amortise
+// per-transaction overhead while keeping progress updates flowing to the UI.
+const SCAN_BATCH_SIZE = 100;
+
 export interface ScanResult {
   scanned: number;
   added: number;
@@ -150,38 +157,52 @@ export async function scanLibrary(opts: ScanOptions = {}): Promise<ScanResult> {
     let processed = 0;
     jobs.update(job.id, { total: files.length, message: "Indexing photos…" });
 
-    await mapLimit(files, config.scanConcurrency, async (file) => {
-      seen.add(file);
+    // Process files in chunks so each chunk commits as one transaction.
+    // Committing per-chunk (rather than per-file) removes ~99% of fsync
+    // overhead while still letting progress updates reach the UI after each
+    // batch commits.
+    for (let i = 0; i < files.length; i += SCAN_BATCH_SIZE) {
+      const chunk = files.slice(i, i + SCAN_BATCH_SIZE);
+      beginBatch();
       try {
-        const stat = await fsp.stat(file);
-        const prev = existing.get(file);
-        const unchanged =
-          prev &&
-          prev.mtime_ms === Math.floor(stat.mtimeMs) &&
-          prev.size_seen === stat.size;
-        if (!unchanged) {
-          await indexFile(file, stat);
-          if (prev) result.updated++;
-          else result.added++;
-        }
-        result.scanned++;
-      } catch {
-        /* skip unreadable file */
-      } finally {
-        processed++;
-        if (processed % 10 === 0 || processed === files.length) {
-          jobs.update(job.id, { progress: processed });
-        }
+        await mapLimit(chunk, config.scanConcurrency, async (file) => {
+          seen.add(file);
+          try {
+            const stat = await fsp.stat(file);
+            const prev = existing.get(file);
+            const unchanged =
+              prev &&
+              prev.mtime_ms === Math.floor(stat.mtimeMs) &&
+              prev.size_seen === stat.size;
+            if (!unchanged) {
+              await indexFile(file, stat);
+              if (prev) result.updated++;
+              else result.added++;
+            }
+            result.scanned++;
+          } catch {
+            /* skip unreadable file */
+          } finally {
+            processed++;
+          }
+        });
+        commitBatch();
+      } catch (err) {
+        rollbackBatch();
+        throw err;
       }
-    });
+      jobs.update(job.id, { progress: processed });
+    }
 
-    // Prune files that disappeared from disk.
+    // Prune files that disappeared from disk (single transaction).
+    const toDelete: string[] = [];
     for (const knownPath of existing.keys()) {
       if (!seen.has(knownPath)) {
-        deletePhotoByPath(knownPath);
+        toDelete.push(knownPath);
         result.removed++;
       }
     }
+    batchDeletePhotos(toDelete);
 
     jobs.update(job.id, {
       progress: files.length,

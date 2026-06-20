@@ -2,11 +2,6 @@ export interface PhotoSummary {
   id: number;
   current_filename: string;
   file_size: number;
-  width: number | null;
-  height: number | null;
-  mime_type: string | null;
-  exif_date_taken: string | null;
-  thumbnail_path: string | null;
   rel_dir: string;
   dup_count: number;
 }
@@ -16,6 +11,10 @@ export interface PhotoDetail extends PhotoSummary {
   original_filename: string;
   file_hash: string | null;
   perceptual_hash: string | null;
+  width: number | null;
+  height: number | null;
+  mime_type: string | null;
+  exif_date_taken: string | null;
   exif_camera_make: string | null;
   exif_camera_model: string | null;
   gps_lat: number | null;
@@ -72,7 +71,6 @@ export interface DuplicateMember {
   file_size: number;
   width: number | null;
   height: number | null;
-  thumbnail_path: string | null;
   path: string;
 }
 

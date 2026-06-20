@@ -3,8 +3,11 @@ import fs from "node:fs";
 import path from "node:path";
 import { z } from "zod";
 import { getDb } from "../db";
-import { getPhotoById } from "../db/photos";
-import { thumbnailAbsPath } from "../scanner/thumbnails";
+import { getPhotoById, updateThumbnailPath } from "../db/photos";
+import { makeThumbnail, thumbnailAbsPath } from "../scanner/thumbnails";
+
+// Keyed by file_hash so exact duplicates share one generation promise.
+const thumbInFlight = new Map<string, Promise<string | null>>();
 
 export const photosRouter = Router();
 
@@ -66,11 +69,11 @@ photosRouter.get("/", (req, res) => {
   ).n;
 
   // LEFT JOIN + GROUP BY instead of a correlated subquery per row.
+  // Only the fields used in the grid are returned; detail fields (dimensions,
+  // EXIF, mime type) are fetched lazily via GET /api/photos/:id.
   const items = db
     .prepare(
-      `SELECT p.id, p.current_filename, p.file_size, p.width, p.height,
-              p.mime_type, p.exif_date_taken, p.thumbnail_path,
-              p.rel_dir,
+      `SELECT p.id, p.current_filename, p.file_size, p.rel_dir,
               COUNT(dm.photo_id) AS dup_count
          FROM photos p
          LEFT JOIN duplicate_group_members dm ON dm.photo_id = p.id
@@ -92,24 +95,46 @@ photosRouter.get("/:id", (req, res) => {
   res.json(photo);
 });
 
-/** GET /api/photos/:id/thumbnail — the cached WebP thumbnail. */
-photosRouter.get("/:id/thumbnail", (req, res) => {
-  const photo = getPhotoById(Number(req.params.id));
-  if (!photo?.thumbnail_path)
-    return res.status(404).json({ error: "no thumbnail" });
-  const abs = thumbnailAbsPath(photo.thumbnail_path);
-  // A 0-byte file means generation is still in flight (or was interrupted).
-  // Don't serve it — and crucially don't let the browser cache an empty body
-  // for a day. Returning 404 with no long-lived cache lets the next request
-  // self-heal once the thumbnail is written.
+/** GET /api/photos/:id/thumbnail — serves (or lazily generates) the WebP thumbnail. */
+photosRouter.get("/:id/thumbnail", async (req, res) => {
+  const id = Number(req.params.id);
+  const photo = getPhotoById(id);
+  if (!photo) return res.status(404).json({ error: "not found" });
+
+  let thumbPath = photo.thumbnail_path;
+
+  if (!thumbPath) {
+    if (!photo.file_hash) return res.status(404).json({ error: "no thumbnail" });
+
+    // Keyed by file_hash: exact duplicates share one generation promise so
+    // only a single sharp process runs even if many requests arrive at once.
+    let gen = thumbInFlight.get(photo.file_hash);
+    if (!gen) {
+      gen = makeThumbnail(photo.path, photo.file_hash)
+        .finally(() => thumbInFlight.delete(photo.file_hash!));
+      thumbInFlight.set(photo.file_hash, gen);
+    }
+    thumbPath = await gen;
+    // Each photo ID gets its own DB record updated (duplicates share the file).
+    if (thumbPath) updateThumbnailPath(id, thumbPath);
+  }
+
+  if (!thumbPath) return res.status(404).json({ error: "thumbnail generation failed" });
+
+  const abs = thumbnailAbsPath(thumbPath);
+  // A 0-byte file means a previous run was interrupted mid-write — don't
+  // serve it or let the browser cache it; the next request will regenerate.
   let size = -1;
   try {
     size = fs.statSync(abs).size;
   } catch {
     /* missing — handled below */
   }
-  if (size <= 0)
+  if (size <= 0) {
+    // Reset the DB so next request regenerates rather than looking for a missing file.
+    updateThumbnailPath(id, null);
     return res.status(404).json({ error: "thumbnail missing" });
+  }
   res.setHeader("Cache-Control", "public, max-age=86400");
   res.sendFile(abs);
 });

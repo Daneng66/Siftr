@@ -194,7 +194,7 @@ export function getPhotosNeedingThumbnails(): Array<{
     .all() as Array<{ id: number; path: string; file_hash: string }>;
 }
 
-export function updateThumbnailPath(id: number, thumbnailPath: string): void {
+export function updateThumbnailPath(id: number, thumbnailPath: string | null): void {
   (_updateThumbStmt ??= getDb().prepare(
     `UPDATE photos SET thumbnail_path = ? WHERE id = ?`
   )).run(thumbnailPath, id);

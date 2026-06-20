@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo, useState } from "react";
 import type { PhotoSummary } from "../../lib/types";
 import { api } from "../../lib/api";
 import { formatBytes } from "../../lib/format";
@@ -13,6 +13,7 @@ interface Props {
 }
 
 function PhotoCardImpl({ photo, selected, onClick, onOpenDetail }: Props) {
+  const [imgError, setImgError] = useState(false);
   return (
     <div
       data-photo-id={photo.id}
@@ -25,19 +26,20 @@ function PhotoCardImpl({ photo, selected, onClick, onOpenDetail }: Props) {
           : "ring-transparent hover:ring-slate-300 dark:hover:ring-slate-600"
       )}
     >
-      {photo.thumbnail_path ? (
+      {imgError ? (
+        <div className="flex h-full w-full items-center justify-center">
+          <ImagesIcon className="text-3xl text-slate-300 dark:text-slate-600" />
+        </div>
+      ) : (
         <img
           src={api.thumbnailUrl(photo.id)}
           alt={photo.current_filename}
           loading="lazy"
           decoding="async"
           draggable={false}
+          onError={() => setImgError(true)}
           className="h-full w-full object-cover"
         />
-      ) : (
-        <div className="flex h-full w-full items-center justify-center">
-          <ImagesIcon className="text-3xl text-slate-300 dark:text-slate-600" />
-        </div>
       )}
 
       {/* Gradient + filename on hover */}

@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useFolders, useStats } from "../../hooks/queries";
+import { useFolders, useHardScanRunning, useStats } from "../../hooks/queries";
 import { useUi } from "../../store/ui";
 import { formatBytes } from "../../lib/format";
 import type { FilterState, Folder } from "../../lib/types";
@@ -106,6 +106,7 @@ export function Sidebar() {
   const { filter, setFilter, setView } = useUi();
   const { data: stats } = useStats();
   const { data: foldersData } = useFolders();
+  const hardScanRunning = useHardScanRunning();
 
   const tree = useMemo(
     () => buildTree(foldersData?.folders ?? []),
@@ -123,15 +124,19 @@ export function Sidebar() {
         <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
           Library
         </h3>
-        <div className="space-y-1">
-          <StatRow label="Photos" value={stats?.photos ?? 0} />
-          <StatRow label="Total size" value={formatBytes(stats?.totalSize ?? 0)} />
-          <StatRow label="Duplicates" value={stats?.duplicateCount ?? 0} />
-          <StatRow
-            label="Reclaimable"
-            value={formatBytes(stats?.reclaimableSize ?? 0)}
-          />
-        </div>
+        {hardScanRunning ? (
+          <p className="text-sm text-slate-400">Rebuilding…</p>
+        ) : (
+          <div className="space-y-1">
+            <StatRow label="Photos" value={stats?.photos ?? 0} />
+            <StatRow label="Total size" value={formatBytes(stats?.totalSize ?? 0)} />
+            <StatRow label="Duplicates" value={stats?.duplicateCount ?? 0} />
+            <StatRow
+              label="Reclaimable"
+              value={formatBytes(stats?.reclaimableSize ?? 0)}
+            />
+          </div>
+        )}
       </section>
 
       <section>

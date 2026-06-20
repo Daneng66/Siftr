@@ -1,5 +1,6 @@
 import type Database from "better-sqlite3";
 import { getDb } from "./index";
+import { invalidateStatsCache } from "./statsCache";
 
 export interface PhotoRow {
   id: number;
@@ -180,17 +181,9 @@ export function clearLibrary(): void {
     db.prepare(`DELETE FROM photos`).run();
   });
   clear();
-}
-
-export function getPhotosNeedingThumbnails(): Array<{
-  id: number;
-  path: string;
-}> {
-  return getDb()
-    .prepare(
-      `SELECT id, path FROM photos WHERE thumbnail_path IS NULL ORDER BY id`
-    )
-    .all() as Array<{ id: number; path: string }>;
+  // The cached stats summary is now stale (everything is zero until the rebuild),
+  // so drop it rather than serve pre-clear numbers for up to the cache TTL.
+  invalidateStatsCache();
 }
 
 /** Bulk-write file hashes obtained from czkawka's dup output (path → hash). */

@@ -58,6 +58,8 @@ export interface JobsResponse {
   scanRunning: boolean;
   dedupRunning: boolean;
   thumbRunning: boolean;
+  /** True for the whole duration of a hard scan; the UI hides images and stats until it completes. */
+  hardScanRunning: boolean;
 }
 
 export type DupStatus = "kept" | "recommended" | "marked_for_deletion" | "ignored";

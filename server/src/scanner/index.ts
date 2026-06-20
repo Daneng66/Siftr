@@ -7,7 +7,7 @@ import { mapLimit } from "../util/concurrency";
 import { dHash } from "../util/hash";
 import { relDir } from "../util/relpath";
 import { readExif } from "./exif";
-import { clearThumbnails } from "./thumbnails";
+import { clearThumbnails, deleteThumbnail } from "./thumbnails";
 import {
   batchDeletePhotos,
   beginBatch,
@@ -128,28 +128,30 @@ export interface ScanResult {
   removed: number;
 }
 
-export interface ScanOptions {
-  /**
-   * Wipe the photo index and all cached thumbnails before scanning, forcing a
-   * full rebuild from disk. Otherwise unchanged files (by mtime+size) are skipped.
-   */
-  hard?: boolean;
-}
+/**
+ * How thorough a scan is:
+ * - `"soft"` (default): only re-index files that changed by mtime+size.
+ * - `"hard"`: wipe the photo index and all cached thumbnails first, forcing a
+ *   full rebuild from disk.
+ */
+export type ScanMode = "soft" | "hard";
 
 /**
  * Index the photos directory. New/changed files (by mtime+size) are hashed,
  * thumbnailed and upserted; vanished files are pruned. Tracked as a `scan` job.
  * A hard scan first clears all indexed data and thumbnails, then regenerates.
  */
-export async function scanLibrary(opts: ScanOptions = {}): Promise<ScanResult> {
+export async function scanLibrary(mode: ScanMode = "soft"): Promise<ScanResult> {
+  const hard = mode === "hard";
   const job = jobs.create(
     "scan",
-    opts.hard ? "Hard scan: clearing data…" : "Scanning library…"
+    hard ? "Hard scan: clearing data…" : "Scanning library…",
+    { hard }
   );
   const result: ScanResult = { scanned: 0, added: 0, updated: 0, removed: 0 };
   const startMs = Date.now();
   try {
-    if (opts.hard) {
+    if (hard) {
       clearLibrary();
       await clearThumbnails();
     }
@@ -196,15 +198,19 @@ export async function scanLibrary(opts: ScanOptions = {}): Promise<ScanResult> {
       jobs.update(job.id, { progress: processed });
     }
 
-    // Prune files that disappeared from disk (single transaction).
+    // Prune files that disappeared from disk (single transaction), and clean up
+    // their cached thumbnails so they don't linger as orphans.
     const toDelete: string[] = [];
-    for (const knownPath of existing.keys()) {
+    const removedIds: number[] = [];
+    for (const [knownPath, info] of existing) {
       if (!seen.has(knownPath)) {
         toDelete.push(knownPath);
+        removedIds.push(info.id);
         result.removed++;
       }
     }
     batchDeletePhotos(toDelete);
+    await Promise.all(removedIds.map((id) => deleteThumbnail(id)));
 
     jobs.update(job.id, {
       progress: files.length,

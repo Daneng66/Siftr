@@ -3,7 +3,7 @@ import { api } from "../../lib/api";
 import {
   useDuplicates,
   useInvalidateLibrary,
-  useJobs,
+  useJobsSnapshot,
 } from "../../hooks/queries";
 import { Button, Modal } from "../../components/ui/Modal";
 import { formatBytes } from "../../lib/format";
@@ -179,8 +179,9 @@ function GroupCard({
 export function DuplicatesView() {
   const { data, refetch, isLoading } = useDuplicates();
   const invalidate = useInvalidateLibrary();
-  const { data: jobsData } = useJobs(true);
+  const { data: jobsData } = useJobsSnapshot();
   const dedupRunning = jobsData?.dedupRunning ?? false;
+  const hardScanRunning = jobsData?.hardScanRunning ?? false;
   const [bulkBusy, setBulkBusy] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [permDeleteArmed, setPermDeleteArmed] = useState(false);
@@ -318,7 +319,16 @@ export function DuplicatesView() {
           </div>
         )}
 
-      {isLoading ? (
+      {hardScanRunning ? (
+        <div className="rounded-xl border border-dashed border-slate-300 p-10 text-center dark:border-slate-700">
+          <CopyIcon className="mx-auto mb-2 text-3xl text-slate-300" />
+          <p className="font-medium">Rebuilding library…</p>
+          <p className="text-sm text-slate-500">
+            A hard scan is re-indexing your photos. Duplicate groups will appear
+            once it finishes.
+          </p>
+        </div>
+      ) : isLoading ? (
         <p className="text-slate-400">Loading…</p>
       ) : groups.length === 0 ? (
         <div className="rounded-xl border border-dashed border-slate-300 p-10 text-center dark:border-slate-700">

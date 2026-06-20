@@ -2,7 +2,6 @@ import { Router } from "express";
 import { jobs } from "../jobs";
 import { scanLibrary } from "../scanner";
 import { runDedup } from "../dedup/czkawka";
-import { generateThumbnails } from "../scanner/thumbnails";
 
 export const jobsRouter = Router();
 
@@ -42,6 +41,8 @@ export const scanRouter = Router();
  * Body `{ hard: true }` clears all indexed data and thumbnails before rebuilding.
  * A duplicate scan is chained on automatically once indexing completes, so the
  * main scan keeps duplicate groups in sync without a separate user action.
+ * Thumbnails are generated lazily on first request, so the scan doesn't trigger
+ * a bulk thumbnail pass.
  */
 scanRouter.post("/", (req, res) => {
   if (jobs.isRunning("scan")) {
@@ -49,14 +50,11 @@ scanRouter.post("/", (req, res) => {
   }
   const hard = (req.body as { hard?: unknown } | undefined)?.hard === true;
   // Fire and forget; progress for both passes is tracked via the jobs table.
-  scanLibrary({ hard })
+  scanLibrary(hard ? "hard" : "soft")
     .then((result) => {
       const changed = result.added + result.updated + result.removed > 0;
       if (changed && !jobs.isRunning("dedup"))
         runDedup().catch((err) => console.error("[dedup] failed:", err));
-      generateThumbnails().catch((err) =>
-        console.error("[thumb] failed:", err)
-      );
     })
     .catch((err) => console.error("[scan] failed:", err));
   res.status(202).json({ started: true });

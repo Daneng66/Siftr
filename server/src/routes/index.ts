@@ -6,6 +6,7 @@ import { foldersRouter } from "./folders";
 import { duplicatesRouter } from "./duplicates";
 import { renameRouter } from "./rename";
 import { metadataRouter } from "./metadata";
+import { trashRouter } from "./trash";
 import { countPhotos } from "../db/photos";
 import { jobs } from "../jobs";
 
@@ -27,3 +28,4 @@ apiRouter.use("/folders", foldersRouter);
 apiRouter.use("/duplicates", duplicatesRouter);
 apiRouter.use("/rename", renameRouter);
 apiRouter.use("/metadata", metadataRouter);
+apiRouter.use("/trash", trashRouter);

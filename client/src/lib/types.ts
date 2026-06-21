@@ -62,6 +62,11 @@ export interface JobsResponse {
   hardScanRunning: boolean;
 }
 
+export interface TrashStats {
+  count: number;
+  size: number;
+}
+
 export type DupStatus = "kept" | "recommended" | "marked_for_deletion" | "ignored";
 
 export interface DuplicateMember {

@@ -31,7 +31,12 @@ function run(
     execFile(
       bin,
       args,
-      { maxBuffer: 64 * 1024 * 1024 },
+      {
+        maxBuffer: 64 * 1024 * 1024,
+        // Persist czkawka's cache on the data volume so unchanged files aren't
+        // re-hashed on every run (it defaults to a non-persisted ~/.cache dir).
+        env: { ...process.env, CZKAWKA_CACHE_PATH: config.czkawkaCachePath },
+      },
       (err, stdout, stderr) => {
         // czkawka exits non-zero in some "found duplicates" cases; rely on the
         // results file rather than the exit code, but surface spawn errors.
@@ -50,11 +55,12 @@ function run(
 
 /**
  * Build czkawka args for a kind, writing compact JSON (`-C`). Verified against
- * czkawka_cli 7.0.0; `-d` directories, `-m` min size, `-s` similarity preset.
+ * czkawka_cli 9.0.0; `-d` directories, `-m` min size, `-s` similarity preset.
  */
 function buildArgs(kind: DupKind, outFile: string): string[] {
   if (kind === "exact") {
-    return ["dup", "-d", config.photosDir, "-m", "1024", "-C", outFile];
+    // `-u` keeps a prehash cache too, so partial hashes also survive between runs.
+    return ["dup", "-d", config.photosDir, "-m", "1024", "-u", "-C", outFile];
   }
   return [
     "image",

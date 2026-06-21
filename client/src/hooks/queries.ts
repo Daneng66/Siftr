@@ -85,6 +85,11 @@ export function useHardScanRunning(): boolean {
   return useJobsSnapshot().data?.hardScanRunning ?? false;
 }
 
+/** File count and total size currently sitting in the trash. */
+export function useTrash() {
+  return useQuery({ queryKey: ["trash"], queryFn: api.trash });
+}
+
 export function useDuplicates(kind?: "exact" | "similar") {
   return useQuery({
     queryKey: ["duplicates", kind ?? "all"],
@@ -100,6 +105,7 @@ export function useInvalidateLibrary() {
     qc.invalidateQueries({ queryKey: ["stats"] });
     qc.invalidateQueries({ queryKey: ["folders"] });
     qc.invalidateQueries({ queryKey: ["duplicates"] });
+    qc.invalidateQueries({ queryKey: ["trash"] });
   };
 }
 

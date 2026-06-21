@@ -1,7 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { useUi } from "../../store/ui";
-import { useJobs, useInvalidateLibrary, useResetLibrary } from "../../hooks/queries";
+import {
+  useJobs,
+  useInvalidateLibrary,
+  useResetLibrary,
+  useTrash,
+} from "../../hooks/queries";
+import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api";
+import { formatBytes } from "../../lib/format";
 import {
   ImagesIcon,
   CopyIcon,
@@ -9,7 +16,9 @@ import {
   ChevronDownIcon,
   MoonIcon,
   ScanIcon,
+  SpinnerIcon,
   SunIcon,
+  TrashIcon,
   XIcon,
 } from "../ui/icons";
 import { Button, Modal } from "../ui/Modal";
@@ -37,6 +46,127 @@ function NavLink({
       <span className="text-base">{icon}</span>
       {label}
     </button>
+  );
+}
+
+/**
+ * Trash icon + dropdown summarising what's in the `.trash` directory, with
+ * "Restore all" and "Delete all" actions. Each action requires a second
+ * confirming click and shows a spinner while it runs.
+ */
+function TrashMenu() {
+  const qc = useQueryClient();
+  const invalidate = useInvalidateLibrary();
+  const { data: trash } = useTrash();
+  const count = trash?.count ?? 0;
+
+  const [open, setOpen] = useState(false);
+  // Which action is armed for its confirming second click ("restore"/"empty"),
+  // and which (if any) is currently running.
+  const [confirm, setConfirm] = useState<"restore" | "empty" | null>(null);
+  const [busy, setBusy] = useState<"restore" | "empty" | null>(null);
+
+  // Reset any pending confirmation whenever the menu closes.
+  useEffect(() => {
+    if (!open) setConfirm(null);
+  }, [open]);
+
+  async function run(action: "restore" | "empty") {
+    if (confirm !== action) {
+      setConfirm(action);
+      return;
+    }
+    setBusy(action);
+    try {
+      if (action === "restore") await api.restoreTrash();
+      else await api.emptyTrash();
+      await qc.invalidateQueries({ queryKey: ["trash"] });
+      invalidate();
+    } catch (err) {
+      console.error("[trash]", action, "failed:", err);
+    } finally {
+      setBusy(null);
+      setConfirm(null);
+    }
+  }
+
+  return (
+    <div className="relative flex">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        aria-label="Trash"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className="relative rounded-lg p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+      >
+        <TrashIcon className="text-lg" />
+        {count > 0 && (
+          <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-brand-600 px-1 text-[10px] font-semibold text-white">
+            {count > 99 ? "99+" : count}
+          </span>
+        )}
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
+          <div
+            role="menu"
+            className="absolute right-0 top-full z-40 mt-1 w-64 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-800"
+          >
+            <div className="border-b border-slate-200 px-3 py-2.5 dark:border-slate-700">
+              <p className="text-sm font-medium">Trash</p>
+              <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                {count === 0
+                  ? "Trash is empty"
+                  : `${count} file${count === 1 ? "" : "s"} · ${formatBytes(
+                      trash?.size ?? 0
+                    )}`}
+              </p>
+            </div>
+            <div className="p-1.5">
+              <button
+                role="menuitem"
+                disabled={count === 0 || busy !== null}
+                onClick={() => run("restore")}
+                className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-slate-700"
+              >
+                {busy === "restore" ? (
+                  <SpinnerIcon className="shrink-0 animate-spin" />
+                ) : (
+                  <ImagesIcon className="shrink-0" />
+                )}
+                <span className={confirm === "restore" ? "font-medium text-brand-600 dark:text-brand-400" : ""}>
+                  {busy === "restore"
+                    ? "Restoring…"
+                    : confirm === "restore"
+                      ? "Click again to confirm"
+                      : "Restore all"}
+                </span>
+              </button>
+              <button
+                role="menuitem"
+                disabled={count === 0 || busy !== null}
+                onClick={() => run("empty")}
+                className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-950/40"
+              >
+                {busy === "empty" ? (
+                  <SpinnerIcon className="shrink-0 animate-spin" />
+                ) : (
+                  <TrashIcon className="shrink-0" />
+                )}
+                <span className={confirm === "empty" ? "font-semibold" : ""}>
+                  {busy === "empty"
+                    ? "Deleting…"
+                    : confirm === "empty"
+                      ? "Click again to confirm"
+                      : "Delete all"}
+                </span>
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 
@@ -153,6 +283,7 @@ export function TopNav() {
               `${activeJob.type}… ${activeJob.progress}/${activeJob.total}`}
           </span>
         )}
+        <TrashMenu />
         <button
           onClick={toggleTheme}
           className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"

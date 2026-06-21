@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { parseDuplicatesJson, parseImagesJson } from "./parser";
 
 describe("parseDuplicatesJson", () => {
-  it("parses the size-keyed dup compact JSON (real czkawka 7 shape)", () => {
+  it("parses the size-keyed dup compact JSON (real czkawka 9 shape)", () => {
     const json = JSON.stringify({
       "16144": [
         [

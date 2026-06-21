@@ -4,7 +4,6 @@ import path from "node:path";
 import sharp from "sharp";
 import { config, IMAGE_EXTENSIONS } from "../config";
 import { mapLimit } from "../util/concurrency";
-import { dHash } from "../util/hash";
 import { relDir } from "../util/relpath";
 import { readExif } from "./exif";
 import { clearThumbnails, deleteThumbnail } from "./thumbnails";
@@ -64,18 +63,12 @@ async function indexFile(filePath: string, stat: fs.Stats): Promise<void> {
 
   let width: number | null = null;
   let height: number | null = null;
-  let phash: string | null = null;
   try {
     const meta = await sharp(filePath, { failOn: "none" }).metadata();
     width = meta.width ?? null;
     height = meta.height ?? null;
     if (meta.orientation && meta.orientation >= 5 && width && height) {
       [width, height] = [height, width];
-    }
-    // Only compute perceptual hash when similar-image dedup is enabled;
-    // it requires a full image decode per file and is wasted otherwise.
-    if (config.dedupSimilarEnabled) {
-      phash = await dHash(filePath);
     }
   } catch {
     /* unreadable image — still index basic info */
@@ -89,7 +82,10 @@ async function indexFile(filePath: string, stat: fs.Stats): Promise<void> {
     original_filename: filename,
     current_filename: filename,
     file_hash: null,  // populated by czkawka dup after scan
-    perceptual_hash: phash,
+    // Perceptual hashing is delegated entirely to czkawka's image pass; we no
+    // longer compute our own (it was a full image decode whose result was never
+    // read). Left null in the index.
+    perceptual_hash: null,
     file_size: stat.size,
     width,
     height,

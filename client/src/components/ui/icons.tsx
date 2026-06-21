@@ -103,3 +103,9 @@ export const ChevronDownIcon = (p: IconProps) => (
     <path d="m6 9 6 6 6-6" />
   </Svg>
 );
+/** Indeterminate spinner — pair with `animate-spin`. */
+export const SpinnerIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+  </Svg>
+);

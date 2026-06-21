@@ -14,8 +14,25 @@ export const config = {
   photosDir: path.join(DATA_DIR, "photos"),
   thumbsDir: path.join(DATA_DIR, "thumbnails"),
   dbDir: path.join(DATA_DIR, "db"),
-  trashDir: path.join(DATA_DIR, ".trash"),
   dbPath: path.join(DATA_DIR, "db", "siftr.sqlite"),
+
+  /**
+   * Where "Move to trash" relocates removed duplicates (reversible deletion).
+   * Defaults to `.trash` inside the data volume, but can be pointed at a
+   * separate path/share via TRASH_DIR — set as a mappable volume in the
+   * container template, the same way the data and cache directories are.
+   */
+  trashDir: path.resolve(process.env.TRASH_DIR ?? path.join(DATA_DIR, ".trash")),
+
+  /**
+   * Where czkawka persists its hash/metadata cache. czkawka defaults to
+   * `~/.cache/czkawka`, which lives outside the `/data` volume and is therefore
+   * lost on every container recreate — forcing a full re-hash of the library on
+   * the next dedup pass. Pointing it at the volume lets re-scans reuse cached
+   * hashes for unchanged files (keyed on path+size+mtime).
+   */
+  czkawkaCachePath:
+    process.env.CZKAWKA_CACHE_PATH ?? path.join(DATA_DIR, "cache", "czkawka"),
 
   /** Directory holding the built React SPA. Set in the Docker image. */
   clientDist:
@@ -52,6 +69,7 @@ export function ensureDataDirs(): void {
     config.thumbsDir,
     config.dbDir,
     config.trashDir,
+    config.czkawkaCachePath,
   ]) {
     fs.mkdirSync(dir, { recursive: true });
   }

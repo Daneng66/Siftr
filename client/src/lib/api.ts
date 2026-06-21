@@ -7,6 +7,7 @@ import type {
   PhotoSummary,
   RenamePlanItem,
   Stats,
+  TrashStats,
 } from "./types";
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
@@ -111,4 +112,10 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ photoIds, edits }),
     }),
+
+  trash: () => request<TrashStats>("/api/trash"),
+  restoreTrash: () =>
+    request<{ restored: number }>("/api/trash/restore", { method: "POST" }),
+  emptyTrash: () =>
+    request<{ deleted: number }>("/api/trash/empty", { method: "POST" }),
 };

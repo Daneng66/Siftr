@@ -117,6 +117,7 @@ npm test
 | --- | --- | --- |
 | `PORT` | `8080` | HTTP port |
 | `DATA_DIR` | `/data` | Root of the persisted volume |
+| `TRASH_DIR` | `$DATA_DIR/.trash` | Holding area for "Move to trash" deletions; point at a separate path/share to keep trashed files off the data volume |
 | `SCAN_ON_STARTUP` | `true` | Scan the library on boot |
 | `SCAN_CONCURRENCY` | `4` | Parallel hash/thumbnail workers |
 | `THUMB_SIZE` | `256` | Thumbnail max dimension (px) |

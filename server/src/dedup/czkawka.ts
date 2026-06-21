@@ -5,7 +5,7 @@ import path from "node:path";
 import os from "node:os";
 import { config } from "../config";
 import { parseDuplicatesJson, parseImagesJson } from "./parser";
-import { getIndexedPaths } from "../db/photos";
+import { bulkUpdateFileHashes, getIndexedPaths } from "../db/photos";
 import {
   DupKind,
   GroupMemberInput,
@@ -31,7 +31,12 @@ function run(
     execFile(
       bin,
       args,
-      { maxBuffer: 64 * 1024 * 1024 },
+      {
+        maxBuffer: 64 * 1024 * 1024,
+        // Persist czkawka's cache on the data volume so unchanged files aren't
+        // re-hashed on every run (it defaults to a non-persisted ~/.cache dir).
+        env: { ...process.env, CZKAWKA_CACHE_PATH: config.czkawkaCachePath },
+      },
       (err, stdout, stderr) => {
         // czkawka exits non-zero in some "found duplicates" cases; rely on the
         // results file rather than the exit code, but surface spawn errors.
@@ -50,11 +55,12 @@ function run(
 
 /**
  * Build czkawka args for a kind, writing compact JSON (`-C`). Verified against
- * czkawka_cli 7.0.0; `-d` directories, `-m` min size, `-s` similarity preset.
+ * czkawka_cli 9.0.0; `-d` directories, `-m` min size, `-s` similarity preset.
  */
 function buildArgs(kind: DupKind, outFile: string): string[] {
   if (kind === "exact") {
-    return ["dup", "-d", config.photosDir, "-m", "1024", "-C", outFile];
+    // `-u` keeps a prehash cache too, so partial hashes also survive between runs.
+    return ["dup", "-d", config.photosDir, "-m", "1024", "-u", "-C", outFile];
   }
   return [
     "image",
@@ -67,7 +73,13 @@ function buildArgs(kind: DupKind, outFile: string): string[] {
   ];
 }
 
-async function scanKind(kind: DupKind): Promise<GroupMemberInput[][]> {
+interface ScanKindResult {
+  groups: GroupMemberInput[][];
+  /** path → hash pairs from czkawka output (only populated for exact kind). */
+  pathHashes: Array<{ path: string; hash: string }>;
+}
+
+async function scanKind(kind: DupKind): Promise<ScanKindResult> {
   const outFile = path.join(
     os.tmpdir(),
     `siftr-czkawka-${kind}-${Date.now()}.json`
@@ -86,12 +98,14 @@ async function scanKind(kind: DupKind): Promise<GroupMemberInput[][]> {
     // Map indexed photos by a normalized path so czkawka's output matches
     // regardless of slash direction / case. czkawka lowercases Windows paths,
     // while the scanner stores them proper-case — exact matching would miss them.
-    const byNorm = new Map<string, { id: number; size: number }>();
+    const byNorm = new Map<string, { id: number; size: number; path: string }>();
     for (const [p, v] of getIndexedPaths()) {
-      byNorm.set(normalizePath(p), { id: v.id, size: v.size_seen });
+      byNorm.set(normalizePath(p), { id: v.id, size: v.size_seen, path: p });
     }
 
     const groups: GroupMemberInput[][] = [];
+    const pathHashes: Array<{ path: string; hash: string }> = [];
+
     for (const group of parsed) {
       const members: GroupMemberInput[] = [];
       let largest = -1;
@@ -108,6 +122,10 @@ async function scanKind(kind: DupKind): Promise<GroupMemberInput[][]> {
           largest = photo.size;
           largestIdx = members.length - 1;
         }
+        // Collect hashes from exact dup output to populate file_hash in DB.
+        if (kind === "exact" && m.hash) {
+          pathHashes.push({ path: photo.path, hash: m.hash });
+        }
       }
       if (members.length >= 2) {
         // Suggest keeping the largest file.
@@ -115,7 +133,7 @@ async function scanKind(kind: DupKind): Promise<GroupMemberInput[][]> {
         groups.push(members);
       }
     }
-    return groups;
+    return { groups, pathHashes };
   } finally {
     if (fs.existsSync(outFile)) await fsp.rm(outFile).catch(() => {});
   }
@@ -135,13 +153,15 @@ export async function runDedup(): Promise<{ exact: number; similar: number }> {
       progress: 0,
       message: "Exact duplicates…",
     });
-    const exactGroups = await scanKind("exact");
+    const { groups: exactGroups, pathHashes } = await scanKind("exact");
     const exact = replaceGroups("exact", exactGroups);
+    // Persist the hashes czkawka computed so scan no longer needs sha256File.
+    bulkUpdateFileHashes(pathHashes);
 
     let similar = 0;
     if (config.dedupSimilarEnabled) {
       jobs.update(job.id, { progress: 1, message: "Similar images…" });
-      const similarGroups = await scanKind("similar");
+      const { groups: similarGroups } = await scanKind("similar");
       similar = replaceGroups("similar", similarGroups);
     } else {
       // Clear any stale similar groups from a previous run.

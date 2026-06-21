@@ -53,7 +53,6 @@ export interface DuplicateMemberView {
   file_size: number;
   width: number | null;
   height: number | null;
-  thumbnail_path: string | null;
   path: string;
 }
 
@@ -66,7 +65,7 @@ export function listGroups(kind?: DupKind) {
            dg.kind, dg.created_at,
            dm.photo_id, dm.status, dm.similarity,
            p.current_filename, p.file_size, p.width, p.height,
-           p.thumbnail_path, p.path
+           p.path
       FROM duplicate_groups dg
       JOIN duplicate_group_members dm ON dm.group_id = dg.id
       JOIN photos p ON p.id = dm.photo_id
@@ -100,7 +99,6 @@ export function listGroups(kind?: DupKind) {
       file_size: row.file_size,
       width: row.width,
       height: row.height,
-      thumbnail_path: row.thumbnail_path,
       path: row.path,
     });
   }

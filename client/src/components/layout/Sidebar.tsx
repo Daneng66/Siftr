@@ -1,9 +1,9 @@
 import { useMemo } from "react";
-import { useFolders, useStats } from "../../hooks/queries";
+import { useFolders, useHardScanRunning, useStats } from "../../hooks/queries";
 import { useUi } from "../../store/ui";
 import { formatBytes } from "../../lib/format";
 import type { FilterState, Folder } from "../../lib/types";
-import { FolderIcon, ImagesIcon, CopyIcon } from "../ui/icons";
+import { FolderIcon, ImagesIcon, CopyIcon, ChatIcon } from "../ui/icons";
 import { clsx } from "clsx";
 
 function StatRow({ label, value }: { label: string; value: string | number }) {
@@ -106,6 +106,12 @@ export function Sidebar() {
   const { filter, setFilter, setView } = useUi();
   const { data: stats } = useStats();
   const { data: foldersData } = useFolders();
+  const hardScanRunning = useHardScanRunning();
+
+  // During a hard scan the index is wiped and rebuilt, but the stats query holds
+  // its last (now stale) values since it stops polling. Treat stats as empty so
+  // the sidebar shows zeroed totals and cleared counts rather than pre-wipe ones.
+  const liveStats = hardScanRunning ? undefined : stats;
 
   const tree = useMemo(
     () => buildTree(foldersData?.folders ?? []),
@@ -124,12 +130,12 @@ export function Sidebar() {
           Library
         </h3>
         <div className="space-y-1">
-          <StatRow label="Photos" value={stats?.photos ?? 0} />
-          <StatRow label="Total size" value={formatBytes(stats?.totalSize ?? 0)} />
-          <StatRow label="Duplicates" value={stats?.duplicateCount ?? 0} />
+          <StatRow label="Photos" value={liveStats?.photos ?? 0} />
+          <StatRow label="Total size" value={formatBytes(liveStats?.totalSize ?? 0)} />
+          <StatRow label="Duplicates" value={liveStats?.duplicateCount ?? 0} />
           <StatRow
             label="Reclaimable"
-            value={formatBytes(stats?.reclaimableSize ?? 0)}
+            value={formatBytes(liveStats?.reclaimableSize ?? 0)}
           />
         </div>
       </section>
@@ -144,7 +150,7 @@ export function Sidebar() {
             onClick={() => select({ kind: "all" })}
             icon={<ImagesIcon />}
             label="All photos"
-            count={stats?.photos}
+            count={liveStats?.photos}
           />
           <FilterButton
             active={filtersEqual(filter, { kind: "duplicates" })}
@@ -171,6 +177,15 @@ export function Sidebar() {
         )}
       </section>
 
+      <a
+        href="https://github.com/Daneng66/Siftr/discussions"
+        target="_blank"
+        rel="noreferrer"
+        className="mt-auto flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+      >
+        <ChatIcon className="text-base text-slate-400" />
+        <span className="flex-1 text-left">Feedback &amp; requests</span>
+      </a>
     </aside>
   );
 }

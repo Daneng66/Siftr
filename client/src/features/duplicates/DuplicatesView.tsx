@@ -3,11 +3,11 @@ import { api } from "../../lib/api";
 import {
   useDuplicates,
   useInvalidateLibrary,
-  useJobs,
+  useJobsSnapshot,
 } from "../../hooks/queries";
 import { Button, Modal } from "../../components/ui/Modal";
 import { formatBytes } from "../../lib/format";
-import { CheckIcon, CopyIcon, StarIcon, TrashIcon } from "../../components/ui/icons";
+import { CheckIcon, CopyIcon, ScanIcon, SpinnerIcon, StarIcon, TrashIcon } from "../../components/ui/icons";
 import type { DuplicateGroup, DupStatus } from "../../lib/types";
 import { clsx } from "clsx";
 
@@ -98,7 +98,8 @@ function GroupCard({
             disabled={busy || markedCount === 0}
             onClick={applyGroup}
           >
-            <TrashIcon /> Delete {markedCount || ""}
+            {busy ? <SpinnerIcon className="animate-spin" /> : <TrashIcon />}
+            {busy ? "Deleting…" : `Delete ${markedCount || ""}`}
           </Button>
         </div>
       </div>
@@ -118,21 +119,12 @@ function GroupCard({
               )}
             >
               <div className="relative aspect-square bg-slate-100 dark:bg-slate-800">
-                {m.thumbnail_path ? (
-                  <img
-                    src={api.thumbnailUrl(m.photo_id)}
-                    alt={m.current_filename}
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="h-8 w-8 text-slate-300 dark:text-slate-600">
-                      <rect x="3" y="3" width="18" height="18" rx="2" />
-                      <circle cx="8.5" cy="8.5" r="1.5" />
-                      <path d="m21 15-5-5L5 21" />
-                    </svg>
-                  </div>
-                )}
+                <img
+                  src={api.thumbnailUrl(m.photo_id)}
+                  alt={m.current_filename}
+                  loading="lazy"
+                  className="h-full w-full object-cover"
+                />
                 {st === "kept" && (
                   <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded bg-emerald-500 px-1.5 py-0.5 text-xs font-semibold text-white">
                     <CheckIcon /> Keep
@@ -186,12 +178,15 @@ function GroupCard({
 }
 
 export function DuplicatesView() {
-  const { data, refetch, isLoading } = useDuplicates();
+  const { data, refetch, isLoading, isFetching } = useDuplicates();
   const invalidate = useInvalidateLibrary();
-  const { data: jobsData } = useJobs(true);
+  const { data: jobsData } = useJobsSnapshot();
   const dedupRunning = jobsData?.dedupRunning ?? false;
+  const hardScanRunning = jobsData?.hardScanRunning ?? false;
   const [bulkBusy, setBulkBusy] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  // Which deletion is in flight, so the matching button shows a spinner.
+  const [deletingMode, setDeletingMode] = useState<null | "trash" | "permanent">(null);
   const [permDeleteArmed, setPermDeleteArmed] = useState(false);
   const permDeleteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Live status overrides from GroupCard optimistic updates, keyed by group id.
@@ -241,19 +236,21 @@ export function DuplicatesView() {
   };
 
   const bulkDelete = async (permanent = false) => {
-    setBulkBusy(true);
-    setShowDeleteConfirm(false);
+    // Keep the confirmation modal open with a spinner until the delete lands.
+    setDeletingMode(permanent ? "permanent" : "trash");
     try {
       await api.applyDuplicates(undefined, permanent);
       setLocalStatuses({});
       invalidate();
       refetch();
+      closeDeleteConfirm();
     } finally {
-      setBulkBusy(false);
+      setDeletingMode(null);
     }
   };
 
   const closeDeleteConfirm = () => {
+    if (deletingMode) return; // don't let a backdrop/Esc close mid-delete
     setShowDeleteConfirm(false);
     setPermDeleteArmed(false);
     if (permDeleteTimer.current) clearTimeout(permDeleteTimer.current);
@@ -296,7 +293,7 @@ export function DuplicatesView() {
           </Button>
           <Button
             variant="danger"
-            disabled={bulkBusy || dedupRunning || totalMarked === 0}
+            disabled={bulkBusy || dedupRunning || totalMarked === 0 || deletingMode !== null}
             onClick={() => setShowDeleteConfirm(true)}
           >
             <TrashIcon /> Delete {totalMarked > 0 ? `${totalMarked} selected` : "selected"}
@@ -307,8 +304,11 @@ export function DuplicatesView() {
         </div>
       )}
 
-      {/* Surface scan status/failures so a run never silently "does nothing". */}
-      {dedupRunning && (
+      {/* Surface scan status/failures so a run never silently "does nothing".
+          When there are no groups yet, the centered status below owns this state;
+          this thin banner is just the "rescanning in the background" indicator
+          shown above the existing groups. */}
+      {dedupRunning && groups.length > 0 && (
         <div className="mb-4 rounded-lg bg-brand-50 px-4 py-2.5 text-sm text-brand-700 dark:bg-brand-900/30 dark:text-brand-200">
           Scanning for duplicates… {latestDedup?.message || ""}
         </div>
@@ -320,6 +320,7 @@ export function DuplicatesView() {
         </div>
       )}
       {!dedupRunning &&
+        !isFetching &&
         latestDedup?.status === "completed" &&
         groups.length === 0 && (
           <div className="mb-4 rounded-lg bg-emerald-50 px-4 py-2.5 text-sm text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
@@ -327,8 +328,27 @@ export function DuplicatesView() {
           </div>
         )}
 
-      {isLoading ? (
-        <p className="text-slate-400">Loading…</p>
+      {hardScanRunning ? (
+        <div className="rounded-xl border border-dashed border-slate-300 p-10 text-center dark:border-slate-700">
+          <CopyIcon className="mx-auto mb-2 text-3xl text-slate-300" />
+          <p className="font-medium">Rebuilding library…</p>
+          <p className="text-sm text-slate-500">
+            A hard scan is re-indexing your photos. Duplicate groups will appear
+            once it finishes.
+          </p>
+        </div>
+      ) : isLoading || ((isFetching || dedupRunning) && groups.length === 0) ? (
+        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 p-10 text-center dark:border-slate-700">
+          <ScanIcon className="mb-2 animate-spin text-3xl text-brand-500" />
+          <p className="font-medium">
+            {dedupRunning ? "Scanning for duplicates…" : "Loading duplicates…"}
+          </p>
+          <p className="text-sm text-slate-500">
+            {dedupRunning
+              ? latestDedup?.message || "Comparing files for exact duplicates."
+              : "Fetching duplicate groups."}
+          </p>
+        </div>
       ) : groups.length === 0 ? (
         <div className="rounded-xl border border-dashed border-slate-300 p-10 text-center dark:border-slate-700">
           <CopyIcon className="mx-auto mb-2 text-3xl text-slate-300" />
@@ -358,23 +378,45 @@ export function DuplicatesView() {
         title="Remove selected duplicates"
         footer={
           <>
-            <Button variant="ghost" onClick={closeDeleteConfirm}>
+            <Button
+              variant="ghost"
+              onClick={closeDeleteConfirm}
+              disabled={deletingMode !== null}
+            >
               Cancel
             </Button>
-            <Button variant="default" onClick={() => bulkDelete(false)}>
-              <TrashIcon /> Move to trash
+            <Button
+              variant="default"
+              onClick={() => bulkDelete(false)}
+              disabled={deletingMode !== null}
+            >
+              {deletingMode === "trash" ? (
+                <SpinnerIcon className="animate-spin" />
+              ) : (
+                <TrashIcon />
+              )}
+              {deletingMode === "trash" ? "Moving…" : "Move to trash"}
             </Button>
             <button
               onClick={handlePermDeleteClick}
+              disabled={deletingMode !== null}
               className={clsx(
-                "inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-all",
+                "inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-all disabled:cursor-not-allowed disabled:opacity-50",
                 permDeleteArmed
                   ? "bg-orange-600 text-white hover:bg-orange-700"
                   : "bg-red-600 text-white hover:bg-red-700"
               )}
             >
-              <TrashIcon />
-              {permDeleteArmed ? "Are you sure?" : "Delete permanently"}
+              {deletingMode === "permanent" ? (
+                <SpinnerIcon className="animate-spin" />
+              ) : (
+                <TrashIcon />
+              )}
+              {deletingMode === "permanent"
+                ? "Deleting…"
+                : permDeleteArmed
+                  ? "Are you sure?"
+                  : "Delete permanently"}
             </button>
           </>
         }

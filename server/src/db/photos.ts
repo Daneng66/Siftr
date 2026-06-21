@@ -1,5 +1,6 @@
 import type Database from "better-sqlite3";
 import { getDb } from "./index";
+import { invalidateStatsCache } from "./statsCache";
 
 export interface PhotoRow {
   id: number;
@@ -180,21 +181,22 @@ export function clearLibrary(): void {
     db.prepare(`DELETE FROM photos`).run();
   });
   clear();
+  // The cached stats summary is now stale (everything is zero until the rebuild),
+  // so drop it rather than serve pre-clear numbers for up to the cache TTL.
+  invalidateStatsCache();
 }
 
-export function getPhotosNeedingThumbnails(): Array<{
-  id: number;
-  path: string;
-  file_hash: string;
-}> {
-  return getDb()
-    .prepare(
-      `SELECT id, path, file_hash FROM photos WHERE thumbnail_path IS NULL ORDER BY id`
-    )
-    .all() as Array<{ id: number; path: string; file_hash: string }>;
+/** Bulk-write file hashes obtained from czkawka's dup output (path → hash). */
+export function bulkUpdateFileHashes(entries: Array<{ path: string; hash: string }>): void {
+  if (entries.length === 0) return;
+  const db = getDb();
+  const stmt = db.prepare(`UPDATE photos SET file_hash = ? WHERE path = ?`);
+  db.transaction(() => {
+    for (const { path, hash } of entries) stmt.run(hash, path);
+  })();
 }
 
-export function updateThumbnailPath(id: number, thumbnailPath: string): void {
+export function updateThumbnailPath(id: number, thumbnailPath: string | null): void {
   (_updateThumbStmt ??= getDb().prepare(
     `UPDATE photos SET thumbnail_path = ? WHERE id = ?`
   )).run(thumbnailPath, id);

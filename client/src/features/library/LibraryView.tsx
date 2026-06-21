@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useUi } from "../../store/ui";
-import { useInfinitePhotos } from "../../hooks/queries";
+import { useHardScanRunning, useInfinitePhotos } from "../../hooks/queries";
 import { useSelection } from "../../store/selection";
 import { PhotoGrid } from "../../components/grid/PhotoGrid";
 import { BulkActionBar } from "../../components/BulkActionBar";
@@ -35,6 +35,7 @@ export function LibraryView() {
   const { filter, sort, setSort, search } = useUi();
   const selection = useSelection();
   const [modal, setModal] = useState<ModalKind>(null);
+  const hardScanRunning = useHardScanRunning();
 
   const query = useInfinitePhotos(filter, sort, search);
   const photos = useMemo(
@@ -49,9 +50,11 @@ export function LibraryView() {
       {/* Context / toolbar bar */}
       <div className="flex shrink-0 items-center gap-3 border-b border-slate-200 bg-white px-5 py-3 dark:border-slate-800 dark:bg-slate-900">
         <h1 className="text-lg font-semibold">{filterTitle(filter)}</h1>
-        <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-500 tabular-nums dark:bg-slate-800">
-          {total}
-        </span>
+        {!hardScanRunning && (
+          <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-500 tabular-nums dark:bg-slate-800">
+            {total}
+          </span>
+        )}
         <div className="flex-1" />
         {photos.length > 0 && (
           <button
@@ -75,7 +78,16 @@ export function LibraryView() {
       </div>
 
       <div className="relative flex-1 overflow-hidden">
-        {query.isLoading ? (
+        {hardScanRunning ? (
+          <div className="flex h-full flex-col items-center justify-center text-center">
+            <ImagesIcon className="mb-3 text-4xl text-slate-300" />
+            <p className="font-medium">Rebuilding library…</p>
+            <p className="max-w-sm text-sm text-slate-500">
+              A hard scan is clearing and re-indexing your photos. They'll appear
+              here once it finishes.
+            </p>
+          </div>
+        ) : query.isLoading ? (
           <div className="flex h-full items-center justify-center text-slate-400">
             Loading…
           </div>

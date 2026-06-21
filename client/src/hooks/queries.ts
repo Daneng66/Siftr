@@ -36,7 +36,19 @@ export function useInfinitePhotos(
 }
 
 export function useStats() {
-  return useQuery({ queryKey: ["stats"], queryFn: api.stats });
+  const qc = useQueryClient();
+  return useQuery({
+    queryKey: ["stats"],
+    queryFn: api.stats,
+    // While a scan or dedup is running the library is actively changing, so poll
+    // to keep the sidebar counts current; stop polling once everything is idle.
+    // A hard scan hides the stats entirely, so there's nothing to keep current.
+    refetchInterval: () => {
+      const jobs = qc.getQueryData<JobsResponse>(["jobs"]);
+      if (!jobs || jobs.hardScanRunning) return false;
+      return jobs.scanRunning || jobs.dedupRunning ? 2000 : false;
+    },
+  });
 }
 
 export function useFolders() {
@@ -52,12 +64,30 @@ export function useJobs(_enabled: boolean) {
     };
     return () => es.close();
   }, [qc]);
+  return useJobsSnapshot();
+}
+
+/**
+ * Read the current jobs snapshot from the shared `["jobs"]` cache without
+ * opening another SSE stream — `useJobs()` (mounted in TopNav) keeps it live.
+ */
+export function useJobsSnapshot() {
   return useQuery<JobsResponse>({
     queryKey: ["jobs"],
     queryFn: api.jobs,
     staleTime: Infinity,
     gcTime: Infinity,
   });
+}
+
+/** True for the whole duration of a hard scan (hides images/stats until done). */
+export function useHardScanRunning(): boolean {
+  return useJobsSnapshot().data?.hardScanRunning ?? false;
+}
+
+/** File count and total size currently sitting in the trash. */
+export function useTrash() {
+  return useQuery({ queryKey: ["trash"], queryFn: api.trash });
 }
 
 export function useDuplicates(kind?: "exact" | "similar") {
@@ -75,5 +105,23 @@ export function useInvalidateLibrary() {
     qc.invalidateQueries({ queryKey: ["stats"] });
     qc.invalidateQueries({ queryKey: ["folders"] });
     qc.invalidateQueries({ queryKey: ["duplicates"] });
+    qc.invalidateQueries({ queryKey: ["trash"] });
+  };
+}
+
+/**
+ * Drop the browsable library caches so the UI falls back to its empty, pre-scan
+ * state. Used when a hard scan wipes the index: rather than show stale data, the
+ * app reverts to the "No photos here yet" onboarding look until the rebuild lands.
+ *
+ * Stats are deliberately left alone — they poll live during a scan so the sidebar
+ * counts stay current (showing the rebuild's progress) rather than blanking out.
+ */
+export function useResetLibrary() {
+  const qc = useQueryClient();
+  return () => {
+    qc.resetQueries({ queryKey: ["photos"] });
+    qc.resetQueries({ queryKey: ["folders"] });
+    qc.resetQueries({ queryKey: ["duplicates"] });
   };
 }

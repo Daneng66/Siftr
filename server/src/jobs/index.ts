@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import type { Response } from "express";
 import { getDb } from "../db";
+import { invalidateStatsCache } from "../db/statsCache";
 
 export type JobType = "scan" | "dedup" | "thumb";
 export type JobStatus = "running" | "completed" | "failed";
@@ -25,6 +26,9 @@ export interface Job {
 class JobManager {
   private active = new Map<JobType, string>();
   private sseClients = new Set<Response>();
+  // True for the full duration of a *hard* scan job (clear → rebuild complete).
+  // A hard scan wipes the index, so the UI hides images and stats until it ends.
+  private hardScanActive = false;
 
   isRunning(type: JobType): boolean {
     return this.active.has(type);
@@ -36,6 +40,7 @@ class JobManager {
       scanRunning: this.isRunning("scan"),
       dedupRunning: this.isRunning("dedup"),
       thumbRunning: this.isRunning("thumb"),
+      hardScanRunning: this.hardScanActive,
     };
   }
 
@@ -70,7 +75,7 @@ class JobManager {
     return info.changes;
   }
 
-  create(type: JobType, message = ""): Job {
+  create(type: JobType, message = "", opts: { hard?: boolean } = {}): Job {
     const id = crypto.randomUUID();
     getDb()
       .prepare(
@@ -79,6 +84,7 @@ class JobManager {
       )
       .run(id, type, message);
     this.active.set(type, id);
+    if (type === "scan" && opts.hard) this.hardScanActive = true;
     const job = this.get(id)!;
     this.broadcast();
     return job;
@@ -114,6 +120,10 @@ class JobManager {
       )
       .run(error ? "failed" : "completed", error ?? null, id);
     if (this.active.get(type) === id) this.active.delete(type);
+    if (type === "scan") this.hardScanActive = false;
+    // A finished scan/dedup changed the library, so any cached stats are stale —
+    // drop them so the client's post-completion refetch gets fresh counts.
+    if (type === "scan" || type === "dedup") invalidateStatsCache();
     this.broadcast();
   }
 

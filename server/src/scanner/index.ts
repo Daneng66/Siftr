@@ -4,10 +4,9 @@ import path from "node:path";
 import sharp from "sharp";
 import { config, IMAGE_EXTENSIONS } from "../config";
 import { mapLimit } from "../util/concurrency";
-import { sha256File, dHash } from "../util/hash";
 import { relDir } from "../util/relpath";
 import { readExif } from "./exif";
-import { clearThumbnails } from "./thumbnails";
+import { clearThumbnails, deleteThumbnail } from "./thumbnails";
 import {
   batchDeletePhotos,
   beginBatch,
@@ -61,22 +60,15 @@ async function walk(dir: string): Promise<string[]> {
 
 async function indexFile(filePath: string, stat: fs.Stats): Promise<void> {
   const ext = path.extname(filePath).toLowerCase();
-  const fileHash = await sha256File(filePath);
 
   let width: number | null = null;
   let height: number | null = null;
-  let phash: string | null = null;
   try {
     const meta = await sharp(filePath, { failOn: "none" }).metadata();
     width = meta.width ?? null;
     height = meta.height ?? null;
     if (meta.orientation && meta.orientation >= 5 && width && height) {
       [width, height] = [height, width];
-    }
-    // Only compute perceptual hash when similar-image dedup is enabled;
-    // it requires a full image decode per file and is wasted otherwise.
-    if (config.dedupSimilarEnabled) {
-      phash = await dHash(filePath);
     }
   } catch {
     /* unreadable image — still index basic info */
@@ -89,8 +81,11 @@ async function indexFile(filePath: string, stat: fs.Stats): Promise<void> {
     path: filePath,
     original_filename: filename,
     current_filename: filename,
-    file_hash: fileHash,
-    perceptual_hash: phash,
+    file_hash: null,  // populated by czkawka dup after scan
+    // Perceptual hashing is delegated entirely to czkawka's image pass; we no
+    // longer compute our own (it was a full image decode whose result was never
+    // read). Left null in the index.
+    perceptual_hash: null,
     file_size: stat.size,
     width,
     height,
@@ -129,28 +124,30 @@ export interface ScanResult {
   removed: number;
 }
 
-export interface ScanOptions {
-  /**
-   * Wipe the photo index and all cached thumbnails before scanning, forcing a
-   * full rebuild from disk. Otherwise unchanged files (by mtime+size) are skipped.
-   */
-  hard?: boolean;
-}
+/**
+ * How thorough a scan is:
+ * - `"soft"` (default): only re-index files that changed by mtime+size.
+ * - `"hard"`: wipe the photo index and all cached thumbnails first, forcing a
+ *   full rebuild from disk.
+ */
+export type ScanMode = "soft" | "hard";
 
 /**
  * Index the photos directory. New/changed files (by mtime+size) are hashed,
  * thumbnailed and upserted; vanished files are pruned. Tracked as a `scan` job.
  * A hard scan first clears all indexed data and thumbnails, then regenerates.
  */
-export async function scanLibrary(opts: ScanOptions = {}): Promise<ScanResult> {
+export async function scanLibrary(mode: ScanMode = "soft"): Promise<ScanResult> {
+  const hard = mode === "hard";
   const job = jobs.create(
     "scan",
-    opts.hard ? "Hard scan: clearing data…" : "Scanning library…"
+    hard ? "Hard scan: clearing data…" : "Scanning library…",
+    { hard }
   );
   const result: ScanResult = { scanned: 0, added: 0, updated: 0, removed: 0 };
   const startMs = Date.now();
   try {
-    if (opts.hard) {
+    if (hard) {
       clearLibrary();
       await clearThumbnails();
     }
@@ -197,15 +194,19 @@ export async function scanLibrary(opts: ScanOptions = {}): Promise<ScanResult> {
       jobs.update(job.id, { progress: processed });
     }
 
-    // Prune files that disappeared from disk (single transaction).
+    // Prune files that disappeared from disk (single transaction), and clean up
+    // their cached thumbnails so they don't linger as orphans.
     const toDelete: string[] = [];
-    for (const knownPath of existing.keys()) {
+    const removedIds: number[] = [];
+    for (const [knownPath, info] of existing) {
       if (!seen.has(knownPath)) {
         toDelete.push(knownPath);
+        removedIds.push(info.id);
         result.removed++;
       }
     }
     batchDeletePhotos(toDelete);
+    await Promise.all(removedIds.map((id) => deleteThumbnail(id)));
 
     jobs.update(job.id, {
       progress: files.length,

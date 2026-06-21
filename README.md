@@ -56,16 +56,25 @@ manually:
 1. **Docker → Add Container**, then in **Template repositories** (under Docker
    settings) add `https://github.com/Daneng66/Siftr` and **Save**.
 2. Back on **Add Container**, select the **Siftr** template.
-3. Set the paths and apply:
+3. Set the port and path mappings, then apply. Each row below maps a value on
+   your unraid host to a fixed location inside the container — only the **Host
+   value** is yours to choose; leave the **Container value** as shown.
 
-   | Setting | Example | Notes |
-   | --- | --- | --- |
-   | **WebUI Port** | `8080` | Port the web UI is served on. |
-   | **App Data** | `/mnt/user/appdata/siftr` | Database, thumbnails, and `.trash`. Keep on a fast cache/appdata share. |
-   | **Photo Library** | `/mnt/user/Photos` | Your photo share, mounted at `/data/photos`. Must be read/write so Siftr can rename and write EXIF. |
-   | **Trash Folder** *(advanced)* | `…/appdata/siftr/.trash` | Optional — map to a separate share to keep trashed files off appdata. |
+   **Port** (`Config Type: Port`)
 
-4. Open the WebUI on port **8080** and click **Scan**.
+   | Name | Container port | Host port | Notes |
+   | --- | --- | --- | --- |
+   | WebUI Port | `8080` | `8080` | TCP. Change the host port only if 8080 is already taken. |
+
+   **Paths** (`Config Type: Path`)
+
+   | Name | Container path | Host path (example) | Access mode | Notes |
+   | --- | --- | --- | --- | --- |
+   | App Data | `/data` | `/mnt/user/appdata/siftr` | Read/Write | Database, thumbnails, and `.trash`. Keep on a fast cache/appdata share. |
+   | Photo Library | `/data/photos` | `/mnt/user/Photos` | Read/Write | Your existing photo share. Must be writable so Siftr can rename files and write EXIF. The container path is intentionally nested under `/data`, but its host path can live on a separate (e.g. array) share. |
+   | Trash Folder *(advanced, optional)* | `/data/.trash` | `/mnt/user/appdata/siftr/.trash` | Read/Write | Where "Move to trash" relocates removed files. Defaults inside App Data; map to its own host share to keep trashed files off appdata or recover them elsewhere. |
+
+4. Open the WebUI on the host port from above (default **8080**) and click **Scan**.
 
 Advanced options (similar-image dedup, scan concurrency, thumbnail size, etc.)
 are exposed as template variables; see [Configuration](#configuration-environment-variables).

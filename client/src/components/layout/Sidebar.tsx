@@ -3,7 +3,7 @@ import { useFolders, useHardScanRunning, useStats } from "../../hooks/queries";
 import { useUi } from "../../store/ui";
 import { formatBytes } from "../../lib/format";
 import type { FilterState, Folder } from "../../lib/types";
-import { FolderIcon, ImagesIcon, CopyIcon } from "../ui/icons";
+import { FolderIcon, ImagesIcon, CopyIcon, ChatIcon } from "../ui/icons";
 import { clsx } from "clsx";
 
 function StatRow({ label, value }: { label: string; value: string | number }) {
@@ -177,6 +177,15 @@ export function Sidebar() {
         )}
       </section>
 
+      <a
+        href="https://github.com/Daneng66/Siftr/discussions"
+        target="_blank"
+        rel="noreferrer"
+        className="mt-auto flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+      >
+        <ChatIcon className="text-base text-slate-400" />
+        <span className="flex-1 text-left">Feedback &amp; requests</span>
+      </a>
     </aside>
   );
 }

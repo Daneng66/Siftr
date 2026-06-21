@@ -3,6 +3,7 @@ import { Sidebar } from "./components/layout/Sidebar";
 import { LibraryView } from "./features/library/LibraryView";
 import { DuplicatesView } from "./features/duplicates/DuplicatesView";
 import { PhotoDetailModal } from "./components/PhotoDetailModal";
+import { WelcomeModal } from "./components/WelcomeModal";
 import { useUi } from "./store/ui";
 
 export default function App() {
@@ -19,6 +20,7 @@ export default function App() {
       </div>
 
       <PhotoDetailModal />
+      <WelcomeModal />
     </div>
   );
 }

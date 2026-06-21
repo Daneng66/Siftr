@@ -108,6 +108,11 @@ export function Sidebar() {
   const { data: foldersData } = useFolders();
   const hardScanRunning = useHardScanRunning();
 
+  // During a hard scan the index is wiped and rebuilt, but the stats query holds
+  // its last (now stale) values since it stops polling. Treat stats as empty so
+  // the sidebar shows zeroed totals and cleared counts rather than pre-wipe ones.
+  const liveStats = hardScanRunning ? undefined : stats;
+
   const tree = useMemo(
     () => buildTree(foldersData?.folders ?? []),
     [foldersData]
@@ -124,19 +129,15 @@ export function Sidebar() {
         <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
           Library
         </h3>
-        {hardScanRunning ? (
-          <p className="text-sm text-slate-400">Rebuilding…</p>
-        ) : (
-          <div className="space-y-1">
-            <StatRow label="Photos" value={stats?.photos ?? 0} />
-            <StatRow label="Total size" value={formatBytes(stats?.totalSize ?? 0)} />
-            <StatRow label="Duplicates" value={stats?.duplicateCount ?? 0} />
-            <StatRow
-              label="Reclaimable"
-              value={formatBytes(stats?.reclaimableSize ?? 0)}
-            />
-          </div>
-        )}
+        <div className="space-y-1">
+          <StatRow label="Photos" value={liveStats?.photos ?? 0} />
+          <StatRow label="Total size" value={formatBytes(liveStats?.totalSize ?? 0)} />
+          <StatRow label="Duplicates" value={liveStats?.duplicateCount ?? 0} />
+          <StatRow
+            label="Reclaimable"
+            value={formatBytes(liveStats?.reclaimableSize ?? 0)}
+          />
+        </div>
       </section>
 
       <section>
@@ -149,7 +150,7 @@ export function Sidebar() {
             onClick={() => select({ kind: "all" })}
             icon={<ImagesIcon />}
             label="All photos"
-            count={stats?.photos}
+            count={liveStats?.photos}
           />
           <FilterButton
             active={filtersEqual(filter, { kind: "duplicates" })}

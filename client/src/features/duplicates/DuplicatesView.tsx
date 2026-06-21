@@ -7,7 +7,7 @@ import {
 } from "../../hooks/queries";
 import { Button, Modal } from "../../components/ui/Modal";
 import { formatBytes } from "../../lib/format";
-import { CheckIcon, CopyIcon, StarIcon, TrashIcon } from "../../components/ui/icons";
+import { CheckIcon, CopyIcon, ScanIcon, StarIcon, TrashIcon } from "../../components/ui/icons";
 import type { DuplicateGroup, DupStatus } from "../../lib/types";
 import { clsx } from "clsx";
 
@@ -177,7 +177,7 @@ function GroupCard({
 }
 
 export function DuplicatesView() {
-  const { data, refetch, isLoading } = useDuplicates();
+  const { data, refetch, isLoading, isFetching } = useDuplicates();
   const invalidate = useInvalidateLibrary();
   const { data: jobsData } = useJobsSnapshot();
   const dedupRunning = jobsData?.dedupRunning ?? false;
@@ -299,8 +299,11 @@ export function DuplicatesView() {
         </div>
       )}
 
-      {/* Surface scan status/failures so a run never silently "does nothing". */}
-      {dedupRunning && (
+      {/* Surface scan status/failures so a run never silently "does nothing".
+          When there are no groups yet, the centered status below owns this state;
+          this thin banner is just the "rescanning in the background" indicator
+          shown above the existing groups. */}
+      {dedupRunning && groups.length > 0 && (
         <div className="mb-4 rounded-lg bg-brand-50 px-4 py-2.5 text-sm text-brand-700 dark:bg-brand-900/30 dark:text-brand-200">
           Scanning for duplicates… {latestDedup?.message || ""}
         </div>
@@ -312,6 +315,7 @@ export function DuplicatesView() {
         </div>
       )}
       {!dedupRunning &&
+        !isFetching &&
         latestDedup?.status === "completed" &&
         groups.length === 0 && (
           <div className="mb-4 rounded-lg bg-emerald-50 px-4 py-2.5 text-sm text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
@@ -328,8 +332,18 @@ export function DuplicatesView() {
             once it finishes.
           </p>
         </div>
-      ) : isLoading ? (
-        <p className="text-slate-400">Loading…</p>
+      ) : isLoading || ((isFetching || dedupRunning) && groups.length === 0) ? (
+        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 p-10 text-center dark:border-slate-700">
+          <ScanIcon className="mb-2 animate-spin text-3xl text-brand-500" />
+          <p className="font-medium">
+            {dedupRunning ? "Scanning for duplicates…" : "Loading duplicates…"}
+          </p>
+          <p className="text-sm text-slate-500">
+            {dedupRunning
+              ? latestDedup?.message || "Comparing files for exact duplicates."
+              : "Fetching duplicate groups."}
+          </p>
+        </div>
       ) : groups.length === 0 ? (
         <div className="rounded-xl border border-dashed border-slate-300 p-10 text-center dark:border-slate-700">
           <CopyIcon className="mx-auto mb-2 text-3xl text-slate-300" />

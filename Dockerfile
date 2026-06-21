@@ -26,6 +26,7 @@ ENV NODE_ENV=production \
     DATA_DIR=/data \
     CLIENT_DIST=/app/client/dist \
     CZKAWKA_BIN=/usr/local/bin/czkawka_cli \
+    CZKAWKA_CACHE_PATH=/data/cache/czkawka \
     EXIFTOOL_BIN=exiftool
 
 # exiftool (EXIF write-back) + libs czkawka_cli may dlopen for image formats.

@@ -42,7 +42,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # `set -eux` + the --version smoke test make the build FAIL if the download is
 # missing/corrupt or the binary can't execute (e.g. a missing shared library),
 # instead of silently shipping an image without a working deduper.
-ARG CZKAWKA_VERSION=7.0.0
+ARG CZKAWKA_VERSION=9.0.0
 RUN set -eux; \
     wget -O /usr/local/bin/czkawka_cli \
       "https://github.com/qarmin/czkawka/releases/download/${CZKAWKA_VERSION}/linux_czkawka_cli"; \

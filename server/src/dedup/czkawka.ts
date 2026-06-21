@@ -50,7 +50,7 @@ function run(
 
 /**
  * Build czkawka args for a kind, writing compact JSON (`-C`). Verified against
- * czkawka_cli 7.0.0; `-d` directories, `-m` min size, `-s` similarity preset.
+ * czkawka_cli 9.0.0; `-d` directories, `-m` min size, `-s` similarity preset.
  */
 function buildArgs(kind: DupKind, outFile: string): string[] {
   if (kind === "exact") {

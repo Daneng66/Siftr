@@ -13,8 +13,9 @@ container** — React frontend, Node/Express API, SQLite index, and the
   corner badges (duplicate indicator, file size).
 - **Deduplication** — `czkawka_cli` finds exact (hash-based) duplicate groups.
   Compare copies side-by-side and pick which to keep; deletions move to a
-  reversible `.trash`. (A perceptual "similar images" pass is also wired up,
-  behind `DEDUP_SIMILAR=true`; off by default for now.)
+  `.trash` you can restore from or empty at any time. (A perceptual "similar
+  images" pass is also wired up, behind `DEDUP_SIMILAR=true`; off by default
+  for now.)
 - **Bulk rename** — pattern tokens (`{date:…}`, `{seq:N}`, `{original}`,
   `{camera}`, `{custom}`) with a live preview and collision detection.
 - **Metadata editing** — view and edit EXIF (date, GPS, camera) individually or
@@ -43,7 +44,7 @@ data/
   photos/       # your images (the watched library — source of truth)
   thumbnails/   # generated WebP thumbnails
   db/siftr.sqlite
-  .trash/       # reversible deletions + edit backups
+  .trash/       # files removed via "Move to trash" (restore or empty from the UI)
 ```
 
 ## Install on unraid

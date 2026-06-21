@@ -7,7 +7,7 @@ import {
 } from "../../hooks/queries";
 import { Button, Modal } from "../../components/ui/Modal";
 import { formatBytes } from "../../lib/format";
-import { CheckIcon, CopyIcon, ScanIcon, StarIcon, TrashIcon } from "../../components/ui/icons";
+import { CheckIcon, CopyIcon, ScanIcon, SpinnerIcon, StarIcon, TrashIcon } from "../../components/ui/icons";
 import type { DuplicateGroup, DupStatus } from "../../lib/types";
 import { clsx } from "clsx";
 
@@ -98,7 +98,8 @@ function GroupCard({
             disabled={busy || markedCount === 0}
             onClick={applyGroup}
           >
-            <TrashIcon /> Delete {markedCount || ""}
+            {busy ? <SpinnerIcon className="animate-spin" /> : <TrashIcon />}
+            {busy ? "Deleting…" : `Delete ${markedCount || ""}`}
           </Button>
         </div>
       </div>
@@ -184,6 +185,8 @@ export function DuplicatesView() {
   const hardScanRunning = jobsData?.hardScanRunning ?? false;
   const [bulkBusy, setBulkBusy] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  // Which deletion is in flight, so the matching button shows a spinner.
+  const [deletingMode, setDeletingMode] = useState<null | "trash" | "permanent">(null);
   const [permDeleteArmed, setPermDeleteArmed] = useState(false);
   const permDeleteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Live status overrides from GroupCard optimistic updates, keyed by group id.
@@ -233,19 +236,21 @@ export function DuplicatesView() {
   };
 
   const bulkDelete = async (permanent = false) => {
-    setBulkBusy(true);
-    setShowDeleteConfirm(false);
+    // Keep the confirmation modal open with a spinner until the delete lands.
+    setDeletingMode(permanent ? "permanent" : "trash");
     try {
       await api.applyDuplicates(undefined, permanent);
       setLocalStatuses({});
       invalidate();
       refetch();
+      closeDeleteConfirm();
     } finally {
-      setBulkBusy(false);
+      setDeletingMode(null);
     }
   };
 
   const closeDeleteConfirm = () => {
+    if (deletingMode) return; // don't let a backdrop/Esc close mid-delete
     setShowDeleteConfirm(false);
     setPermDeleteArmed(false);
     if (permDeleteTimer.current) clearTimeout(permDeleteTimer.current);
@@ -288,7 +293,7 @@ export function DuplicatesView() {
           </Button>
           <Button
             variant="danger"
-            disabled={bulkBusy || dedupRunning || totalMarked === 0}
+            disabled={bulkBusy || dedupRunning || totalMarked === 0 || deletingMode !== null}
             onClick={() => setShowDeleteConfirm(true)}
           >
             <TrashIcon /> Delete {totalMarked > 0 ? `${totalMarked} selected` : "selected"}
@@ -373,23 +378,45 @@ export function DuplicatesView() {
         title="Remove selected duplicates"
         footer={
           <>
-            <Button variant="ghost" onClick={closeDeleteConfirm}>
+            <Button
+              variant="ghost"
+              onClick={closeDeleteConfirm}
+              disabled={deletingMode !== null}
+            >
               Cancel
             </Button>
-            <Button variant="default" onClick={() => bulkDelete(false)}>
-              <TrashIcon /> Move to trash
+            <Button
+              variant="default"
+              onClick={() => bulkDelete(false)}
+              disabled={deletingMode !== null}
+            >
+              {deletingMode === "trash" ? (
+                <SpinnerIcon className="animate-spin" />
+              ) : (
+                <TrashIcon />
+              )}
+              {deletingMode === "trash" ? "Moving…" : "Move to trash"}
             </Button>
             <button
               onClick={handlePermDeleteClick}
+              disabled={deletingMode !== null}
               className={clsx(
-                "inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-all",
+                "inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-all disabled:cursor-not-allowed disabled:opacity-50",
                 permDeleteArmed
                   ? "bg-orange-600 text-white hover:bg-orange-700"
                   : "bg-red-600 text-white hover:bg-red-700"
               )}
             >
-              <TrashIcon />
-              {permDeleteArmed ? "Are you sure?" : "Delete permanently"}
+              {deletingMode === "permanent" ? (
+                <SpinnerIcon className="animate-spin" />
+              ) : (
+                <TrashIcon />
+              )}
+              {deletingMode === "permanent"
+                ? "Deleting…"
+                : permDeleteArmed
+                  ? "Are you sure?"
+                  : "Delete permanently"}
             </button>
           </>
         }

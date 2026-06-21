@@ -48,24 +48,30 @@ data/
 
 ## Install on unraid
 
-Siftr is packaged as an unraid Community Apps template
-(`unraid/siftr.xml`), backed by a prebuilt image published to GHCR at
-`ghcr.io/daneng66/siftr`.
+Siftr ships as an unraid template (`unraid/siftr.xml`) backed by the prebuilt
+GHCR image `ghcr.io/daneng66/siftr`. Until it lands in Community Apps, add it
+manually:
 
-Until it lands in the Community Apps catalog, you can add it manually:
+1. **Docker → Add Container**, then in **Template repositories** (under Docker
+   settings) add `https://github.com/Daneng66/Siftr` and **Save**.
+2. Back on **Add Container**, select the **Siftr** template.
+3. Set the paths and apply:
 
-1. In unraid, go to **Docker → Add Container** and, in the **Template
-   repositories** field (Docker settings), add
-   `https://github.com/Daneng66/Siftr`.
-2. Pick the **Siftr** template and set the two paths:
-   - **App Data** → e.g. `/mnt/user/appdata/siftr` (database, thumbnails,
-     `.trash` — keep on cache/appdata).
-   - **Photo Library** → your existing photo share, e.g. `/mnt/user/Photos`
-     (mounted at `/data/photos`, read/write so Siftr can rename and write EXIF).
-3. Apply, then open the WebUI on port **8080** and click **Scan**.
+   | Setting | Example | Notes |
+   | --- | --- | --- |
+   | **WebUI Port** | `8080` | Port the web UI is served on. |
+   | **App Data** | `/mnt/user/appdata/siftr` | Database, thumbnails, and `.trash`. Keep on a fast cache/appdata share. |
+   | **Photo Library** | `/mnt/user/Photos` | Your photo share, mounted at `/data/photos`. Must be read/write so Siftr can rename and write EXIF. |
+   | **Trash Folder** *(advanced)* | `…/appdata/siftr/.trash` | Optional — map to a separate share to keep trashed files off appdata. |
 
-The image is `linux/amd64` only — czkawka publishes an x86_64 Linux CLI and no
-ARM build, so Siftr targets standard (Intel/AMD) unraid hardware.
+4. Open the WebUI on port **8080** and click **Scan**.
+
+Advanced options (similar-image dedup, scan concurrency, thumbnail size, etc.)
+are exposed as template variables; see [Configuration](#configuration-environment-variables).
+
+> [!NOTE]
+> The image is **`linux/amd64` only** — czkawka has no ARM build — so Siftr
+> targets standard Intel/AMD unraid hardware.
 
 ## Architecture
 

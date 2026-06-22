@@ -1,10 +1,9 @@
-<?xml version="1.0"?>
-<Profiles>
+<?xml version="1.0" encoding="utf-8"?>
+<Maintainer>
+  <Icon>https://raw.githubusercontent.com/Daneng66/Siftr/main/unraid/siftr-icon.png</Icon>
   <Profile>
-    <Author>Daneng66</Author>
-    <Name>Daneng66</Name>
-    <Support>https://github.com/Daneng66/Siftr/issues</Support>
-    <Icon>https://raw.githubusercontent.com/Daneng66/Siftr/main/unraid/siftr-icon.png</Icon>
-    <TemplateURL>https://raw.githubusercontent.com/Daneng66/Siftr/main/unraid/siftr.xml</TemplateURL>
+    Self-hosted photo manager that helps you sift through your library with smart renaming, organizing, and deduplication. Exact and perceptual duplicate detection powered by czkawka, EXIF write-back via exiftool — all bundled in a single all-in-one Docker image, nothing else to install.
   </Profile>
-</Profiles>
+  <DonateLink></DonateLink>
+  <DonateText></DonateText>
+</Maintainer>

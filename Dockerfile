@@ -58,6 +58,10 @@ COPY --from=build /app/client/dist ./client/dist
 COPY --from=build /app/package.json ./package.json
 COPY --from=build /app/server/package.json ./server/package.json
 
+LABEL org.opencontainers.image.licenses="MIT"
+
 VOLUME ["/data"]
 EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+  CMD wget -q --spider http://localhost:8080/api/health || exit 1
 CMD ["node", "server/dist/server.js"]

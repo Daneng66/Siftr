@@ -1,19 +1,26 @@
-import { memo, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import type { PhotoSummary } from "../../lib/types";
 import { api } from "../../lib/api";
 import { formatBytes } from "../../lib/format";
 import { clsx } from "clsx";
-import { CheckIcon, CopyIcon, DownloadIcon, ImagesIcon } from "../ui/icons";
+import { CheckIcon, CopyIcon, DownloadIcon, ImagesIcon, SpinnerIcon } from "../ui/icons";
 
 interface Props {
   photo: PhotoSummary;
   selected: boolean;
   onClick: (e: React.MouseEvent) => void;
   onOpenDetail: () => void;
+  thumbRunning?: boolean;
+  thumbVersion?: number;
 }
 
-function PhotoCardImpl({ photo, selected, onClick, onOpenDetail }: Props) {
+function PhotoCardImpl({ photo, selected, onClick, onOpenDetail, thumbRunning = false, thumbVersion = 0 }: Props) {
   const [imgError, setImgError] = useState(false);
+
+  // When the thumbnail job completes, clear the error so the img retries.
+  useEffect(() => {
+    if (thumbVersion > 0) setImgError(false);
+  }, [thumbVersion]);
   return (
     <div
       data-photo-id={photo.id}
@@ -28,7 +35,11 @@ function PhotoCardImpl({ photo, selected, onClick, onOpenDetail }: Props) {
     >
       {imgError ? (
         <div className="flex h-full w-full items-center justify-center">
-          <ImagesIcon className="text-3xl text-slate-300 dark:text-slate-600" />
+          {thumbRunning ? (
+            <SpinnerIcon className="animate-spin text-2xl text-slate-400 dark:text-slate-500" />
+          ) : (
+            <ImagesIcon className="text-3xl text-slate-300 dark:text-slate-600" />
+          )}
         </div>
       ) : (
         <img

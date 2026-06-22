@@ -6,14 +6,16 @@ import { config, IMAGE_EXTENSIONS } from "../config";
 import { mapLimit } from "../util/concurrency";
 import { relDir } from "../util/relpath";
 import { readExif } from "./exif";
-import { clearThumbnails, deleteThumbnail } from "./thumbnails";
+import { clearThumbnails, deleteThumbnail, makeThumbnail } from "./thumbnails";
 import {
   batchDeletePhotos,
   beginBatch,
   clearLibrary,
   commitBatch,
   getIndexedPaths,
+  getPhotosWithMissingThumbnails,
   rollbackBatch,
+  updateThumbnailPath,
   upsertPhoto,
 } from "../db/photos";
 import { jobs } from "../jobs";
@@ -221,6 +223,32 @@ export async function scanLibrary(mode: ScanMode = "soft"): Promise<ScanResult> 
     return result;
   } catch (err) {
     jobs.finish(job.id, "scan", err instanceof Error ? err.message : String(err));
+    throw err;
+  }
+}
+
+/**
+ * Generate thumbnails for all photos that don't have one yet. Tracked as a
+ * `thumb` job so the frontend can show a progress indicator and know when
+ * all thumbnails are ready.
+ */
+export async function runThumbnailJob(): Promise<void> {
+  const photos = getPhotosWithMissingThumbnails();
+  if (photos.length === 0) return;
+
+  const job = jobs.create("thumb", "Generating thumbnails…");
+  jobs.update(job.id, { total: photos.length });
+  let done = 0;
+  try {
+    await mapLimit(photos, config.scanConcurrency, async ({ id, path }) => {
+      const thumbPath = await makeThumbnail(path, id);
+      if (thumbPath) updateThumbnailPath(id, thumbPath);
+      jobs.update(job.id, { progress: ++done });
+    });
+    jobs.finish(job.id, "thumb");
+    console.log(`[thumb] done — generated ${photos.length} thumbnails`);
+  } catch (err) {
+    jobs.finish(job.id, "thumb", err instanceof Error ? err.message : String(err));
     throw err;
   }
 }

@@ -4,6 +4,7 @@ import type { PhotoSummary } from "../../lib/types";
 import { PhotoCard } from "./PhotoCard";
 import { useSelection } from "../../store/selection";
 import { useUi } from "../../store/ui";
+import { useJobsSnapshot } from "../../hooks/queries";
 
 interface Props {
   photos: PhotoSummary[];
@@ -32,6 +33,18 @@ export function PhotoGrid({
   const [cols, setCols] = useState(4);
   const selection = useSelection();
   const setDetailPhotoId = useUi((s) => s.setDetailPhotoId);
+
+  // Track thumb job completion so cards can retry after thumbnails are ready.
+  const { data: jobsData } = useJobsSnapshot();
+  const thumbRunning = jobsData?.thumbRunning ?? false;
+  const [thumbVersion, setThumbVersion] = useState(0);
+  const prevThumbRunning = useRef(false);
+  useEffect(() => {
+    if (prevThumbRunning.current && !thumbRunning) {
+      setThumbVersion((v) => v + 1);
+    }
+    prevThumbRunning.current = thumbRunning;
+  }, [thumbRunning]);
 
   // Responsive column count from container width.
   useLayoutEffect(() => {
@@ -195,6 +208,8 @@ export function PhotoGrid({
                   selected={selection.selected.has(photo.id)}
                   onClick={(e) => onCardClick(photo.id, e)}
                   onOpenDetail={() => setDetailPhotoId(photo.id)}
+                  thumbRunning={thumbRunning}
+                  thumbVersion={thumbVersion}
                 />
               ))}
             </div>

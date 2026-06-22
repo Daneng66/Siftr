@@ -34,9 +34,11 @@ export function PhotoGrid({
   const selection = useSelection();
   const setDetailPhotoId = useUi((s) => s.setDetailPhotoId);
 
-  // Track thumb job completion so cards can retry after thumbnails are ready.
+  // Track thumb job state so cards can show spinners during generation and
+  // retry with cache-busted URLs when complete.
   const { data: jobsData } = useJobsSnapshot();
   const thumbRunning = jobsData?.thumbRunning ?? false;
+  const thumbSeed = jobsData?.thumbSeed ?? 0;
   const [thumbVersion, setThumbVersion] = useState(0);
   const prevThumbRunning = useRef(false);
   useEffect(() => {
@@ -210,6 +212,7 @@ export function PhotoGrid({
                   onOpenDetail={() => setDetailPhotoId(photo.id)}
                   thumbRunning={thumbRunning}
                   thumbVersion={thumbVersion}
+                  thumbSeed={thumbSeed}
                 />
               ))}
             </div>

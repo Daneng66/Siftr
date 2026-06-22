@@ -60,6 +60,8 @@ export interface JobsResponse {
   thumbRunning: boolean;
   /** True for the whole duration of a hard scan; the UI hides images and stats until it completes. */
   hardScanRunning: boolean;
+  /** Increments each time an explicit "regenerate all thumbnails" job starts. Used to immediately clear displayed thumbnails and cache-bust URLs. */
+  thumbSeed: number;
 }
 
 export interface TrashStats {

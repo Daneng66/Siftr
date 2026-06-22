@@ -210,7 +210,7 @@ export function countPhotos(): number {
 
 export function getPhotosWithMissingThumbnails(): Array<{ id: number; path: string }> {
   return getDb()
-    .prepare(`SELECT id, path FROM photos WHERE thumbnail_path IS NULL ORDER BY id`)
+    .prepare(`SELECT id, path FROM photos WHERE thumbnail_path IS NULL ORDER BY date_imported DESC, id DESC`)
     .all() as Array<{ id: number; path: string }>;
 }
 

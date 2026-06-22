@@ -29,6 +29,10 @@ class JobManager {
   // True for the full duration of a *hard* scan job (clear → rebuild complete).
   // A hard scan wipes the index, so the UI hides images and stats until it ends.
   private hardScanActive = false;
+  // Incremented each time a *regeneration* thumb job starts (as opposed to a
+  // fill-missing pass after a normal scan). The frontend uses this to
+  // immediately clear all displayed thumbnails and cache-bust URLs.
+  private thumbSeed = 0;
 
   isRunning(type: JobType): boolean {
     return this.active.has(type);
@@ -41,6 +45,7 @@ class JobManager {
       dedupRunning: this.isRunning("dedup"),
       thumbRunning: this.isRunning("thumb"),
       hardScanRunning: this.hardScanActive,
+      thumbSeed: this.thumbSeed,
     };
   }
 
@@ -75,7 +80,7 @@ class JobManager {
     return info.changes;
   }
 
-  create(type: JobType, message = "", opts: { hard?: boolean } = {}): Job {
+  create(type: JobType, message = "", opts: { hard?: boolean; regenerate?: boolean } = {}): Job {
     const id = crypto.randomUUID();
     getDb()
       .prepare(
@@ -85,6 +90,7 @@ class JobManager {
       .run(id, type, message);
     this.active.set(type, id);
     if (type === "scan" && opts.hard) this.hardScanActive = true;
+    if (type === "thumb" && opts.regenerate) this.thumbSeed++;
     const job = this.get(id)!;
     this.broadcast();
     return job;

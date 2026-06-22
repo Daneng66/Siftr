@@ -75,6 +75,6 @@ scanRouter.post("/thumbnails", async (req, res) => {
   }
   clearAllThumbnailPaths();
   await clearThumbnails();
-  runThumbnailJob().catch((err) => console.error("[thumb] regenerate failed:", err));
+  runThumbnailJob(true).catch((err) => console.error("[thumb] regenerate failed:", err));
   res.status(202).json({ started: true });
 });

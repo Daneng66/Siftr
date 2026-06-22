@@ -12,10 +12,17 @@ interface Props {
   onOpenDetail: () => void;
   thumbRunning?: boolean;
   thumbVersion?: number;
+  thumbSeed?: number;
 }
 
-function PhotoCardImpl({ photo, selected, onClick, onOpenDetail, thumbRunning = false, thumbVersion = 0 }: Props) {
+function PhotoCardImpl({ photo, selected, onClick, onOpenDetail, thumbRunning = false, thumbVersion = 0, thumbSeed = 0 }: Props) {
   const [imgError, setImgError] = useState(false);
+
+  // When regeneration starts (thumbSeed increments), immediately clear the
+  // displayed thumbnail so stale cached images don't linger.
+  useEffect(() => {
+    if (thumbSeed > 0) setImgError(true);
+  }, [thumbSeed]);
 
   // When the thumbnail job completes, clear the error so the img retries.
   useEffect(() => {
@@ -43,7 +50,7 @@ function PhotoCardImpl({ photo, selected, onClick, onOpenDetail, thumbRunning = 
         </div>
       ) : (
         <img
-          src={api.thumbnailUrl(photo.id)}
+          src={thumbSeed > 0 ? `${api.thumbnailUrl(photo.id)}?v=${thumbSeed}` : api.thumbnailUrl(photo.id)}
           alt={photo.current_filename}
           loading="lazy"
           decoding="async"

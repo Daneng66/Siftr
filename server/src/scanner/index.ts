@@ -232,11 +232,11 @@ export async function scanLibrary(mode: ScanMode = "soft"): Promise<ScanResult> 
  * `thumb` job so the frontend can show a progress indicator and know when
  * all thumbnails are ready.
  */
-export async function runThumbnailJob(): Promise<void> {
+export async function runThumbnailJob(regenerate = false): Promise<void> {
   const photos = getPhotosWithMissingThumbnails();
   if (photos.length === 0) return;
 
-  const job = jobs.create("thumb", "Generating thumbnails…");
+  const job = jobs.create("thumb", "Generating thumbnails…", { regenerate });
   jobs.update(job.id, { total: photos.length });
   let done = 0;
   try {

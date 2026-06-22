@@ -1,4 +1,4 @@
-import { memo, useEffect, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import type { PhotoSummary } from "../../lib/types";
 import { api } from "../../lib/api";
 import { formatBytes } from "../../lib/format";
@@ -17,11 +17,14 @@ interface Props {
 
 function PhotoCardImpl({ photo, selected, onClick, onOpenDetail, thumbRunning = false, thumbVersion = 0, thumbSeed = 0 }: Props) {
   const [imgError, setImgError] = useState(false);
+  const mountedThumbSeed = useRef(thumbSeed);
 
-  // When regeneration starts (thumbSeed increments), immediately clear the
-  // displayed thumbnail so stale cached images don't linger.
+  // When regeneration starts (thumbSeed increments past the value seen at mount),
+  // immediately clear the displayed thumbnail so stale cached images don't linger.
+  // Skipping the mount-time value avoids re-triggering the spinner state after a
+  // PhotoGrid remount when a previous regeneration has already completed.
   useEffect(() => {
-    if (thumbSeed > 0) setImgError(true);
+    if (thumbSeed > mountedThumbSeed.current) setImgError(true);
   }, [thumbSeed]);
 
   // When the thumbnail job completes, clear the error so the img retries.

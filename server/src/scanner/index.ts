@@ -242,18 +242,11 @@ export async function runThumbnailJob(regenerate = false): Promise<void> {
   try {
     for (let i = 0; i < photos.length; i += SCAN_BATCH_SIZE) {
       const chunk = photos.slice(i, i + SCAN_BATCH_SIZE);
-      beginBatch();
-      try {
-        await mapLimit(chunk, config.scanConcurrency, async ({ id, path }) => {
-          const thumbPath = await makeThumbnail(path, id);
-          if (thumbPath) updateThumbnailPath(id, thumbPath);
-          done++;
-        });
-        commitBatch();
-      } catch (err) {
-        rollbackBatch();
-        throw err;
-      }
+      await mapLimit(chunk, config.scanConcurrency, async ({ id, path }) => {
+        const thumbPath = await makeThumbnail(path, id);
+        if (thumbPath) updateThumbnailPath(id, thumbPath);
+        done++;
+      });
       jobs.update(job.id, { progress: done });
     }
     jobs.finish(job.id, "thumb");

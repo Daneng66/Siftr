@@ -2,6 +2,8 @@ import { Router } from "express";
 import { jobs } from "../jobs";
 import { runThumbnailJob, scanLibrary } from "../scanner";
 import { runDedup } from "../dedup/czkawka";
+import { clearAllThumbnailPaths } from "../db/photos";
+import { clearThumbnails } from "../scanner/thumbnails";
 
 export const jobsRouter = Router();
 
@@ -57,5 +59,22 @@ scanRouter.post("/", (req, res) => {
         runThumbnailJob().catch((err) => console.error("[thumb] failed:", err));
     })
     .catch((err) => console.error("[scan] failed:", err));
+  res.status(202).json({ started: true });
+});
+
+/**
+ * POST /api/scan/thumbnails — clear all cached thumbnails and regenerate them.
+ * Rejects if a scan or thumb job is already running.
+ */
+scanRouter.post("/thumbnails", async (req, res) => {
+  if (jobs.isRunning("scan")) {
+    return res.status(409).json({ error: "scan already running" });
+  }
+  if (jobs.isRunning("thumb")) {
+    return res.status(409).json({ error: "thumbnail job already running" });
+  }
+  clearAllThumbnailPaths();
+  await clearThumbnails();
+  runThumbnailJob().catch((err) => console.error("[thumb] regenerate failed:", err));
   res.status(202).json({ started: true });
 });

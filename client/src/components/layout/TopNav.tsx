@@ -178,6 +178,7 @@ export function TopNav() {
 
   const [scanMenuOpen, setScanMenuOpen] = useState(false);
   const [hardScanConfirm, setHardScanConfirm] = useState(false);
+  const [regenThumbConfirm, setRegenThumbConfirm] = useState(false);
 
   const { data: jobsData } = useJobs(true);
   const scanRunning = jobsData?.scanRunning ?? false;
@@ -340,6 +341,22 @@ export function TopNav() {
                 </button>
                 <button
                   role="menuitem"
+                  disabled={thumbRunning}
+                  className="block w-full px-3 py-2 text-left hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-slate-700"
+                  onClick={() => {
+                    setScanMenuOpen(false);
+                    setRegenThumbConfirm(true);
+                  }}
+                >
+                  <span className="text-sm font-medium">
+                    {thumbRunning ? "Generating thumbnails…" : "Regenerate thumbnails"}
+                  </span>
+                  <span className="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">
+                    Clear cached thumbnails and rebuild them all
+                  </span>
+                </button>
+                <button
+                  role="menuitem"
                   className="block w-full px-3 py-2 text-left hover:bg-slate-100 dark:hover:bg-slate-700"
                   onClick={() => {
                     setScanMenuOpen(false);
@@ -388,6 +405,36 @@ export function TopNav() {
         </p>
         <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
           Your photo files on disk are not touched.
+        </p>
+      </Modal>
+
+      <Modal
+        open={regenThumbConfirm}
+        onClose={() => setRegenThumbConfirm(false)}
+        title="Regenerate thumbnails?"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setRegenThumbConfirm(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              onClick={() => {
+                setRegenThumbConfirm(false);
+                api.regenerateThumbnails().catch(() => {});
+              }}
+            >
+              Regenerate
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-slate-600 dark:text-slate-300">
+          This deletes all cached thumbnails and regenerates them from the
+          original files. Your photos are not affected.
+        </p>
+        <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+          Thumbnails will appear as spinners until generation completes.
         </p>
       </Modal>
 

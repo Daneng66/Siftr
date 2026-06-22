@@ -61,6 +61,8 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ hard }),
     }),
+  regenerateThumbnails: () =>
+    request<{ started: boolean }>("/api/scan/thumbnails", { method: "POST" }),
 
   folders: () => request<{ folders: Folder[] }>("/api/folders"),
 

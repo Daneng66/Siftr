@@ -213,3 +213,8 @@ export function getPhotosWithMissingThumbnails(): Array<{ id: number; path: stri
     .prepare(`SELECT id, path FROM photos WHERE thumbnail_path IS NULL ORDER BY id`)
     .all() as Array<{ id: number; path: string }>;
 }
+
+/** Reset thumbnail_path to NULL for every photo so the thumb job regenerates all of them. */
+export function clearAllThumbnailPaths(): void {
+  getDb().prepare(`UPDATE photos SET thumbnail_path = NULL`).run();
+}

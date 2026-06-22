@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+<Profiles>
+  <Profile>
+    <Author>Daneng66</Author>
+    <Name>Daneng66</Name>
+    <Support>https://github.com/Daneng66/Siftr/issues</Support>
+    <Icon>https://raw.githubusercontent.com/Daneng66/Siftr/main/unraid/siftr-icon.png</Icon>
+    <TemplateURL>https://raw.githubusercontent.com/Daneng66/Siftr/main/unraid/siftr.xml</TemplateURL>
+  </Profile>
+</Profiles>

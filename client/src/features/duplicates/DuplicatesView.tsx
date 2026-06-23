@@ -120,7 +120,7 @@ function GroupCard({
             >
               <div className="relative aspect-square bg-slate-100 dark:bg-slate-800">
                 <img
-                  src={api.thumbnailUrl(m.photo_id)}
+                  src={api.thumbnailUrl(m.photo_id, "s", m.mtime_ms)}
                   alt={m.current_filename}
                   loading="lazy"
                   className="h-full w-full object-cover"

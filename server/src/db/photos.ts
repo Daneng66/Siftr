@@ -20,7 +20,7 @@ export interface PhotoRow {
   gps_lon: number | null;
   date_imported: string;
   date_modified: string | null;
-  thumbnail_path: string | null;
+  lqip: string | null;
   rel_dir: string;
   mtime_ms: number;
   size_seen: number;
@@ -42,7 +42,6 @@ export interface PhotoUpsert {
   gps_lat: number | null;
   gps_lon: number | null;
   date_modified: string | null;
-  thumbnail_path: string | null;
   rel_dir: string;
   mtime_ms: number;
   size_seen: number;
@@ -51,19 +50,19 @@ export interface PhotoUpsert {
 // Lazily cached prepared statements — avoids re-compiling SQL on every call.
 let _upsertStmt: Database.Statement | null = null;
 let _deleteByPathStmt: Database.Statement | null = null;
-let _updateThumbStmt: Database.Statement | null = null;
+let _updateLqipStmt: Database.Statement | null = null;
 
 function getUpsertStmt(): Database.Statement {
   return (_upsertStmt ??= getDb().prepare(
     `INSERT INTO photos (
        path, original_filename, current_filename, file_hash, perceptual_hash,
        file_size, width, height, mime_type, exif_date_taken, exif_camera_make,
-       exif_camera_model, gps_lat, gps_lon, date_modified, thumbnail_path,
+       exif_camera_model, gps_lat, gps_lon, date_modified,
        rel_dir, mtime_ms, size_seen
      ) VALUES (
        @path, @original_filename, @current_filename, @file_hash, @perceptual_hash,
        @file_size, @width, @height, @mime_type, @exif_date_taken, @exif_camera_make,
-       @exif_camera_model, @gps_lat, @gps_lon, @date_modified, @thumbnail_path,
+       @exif_camera_model, @gps_lat, @gps_lon, @date_modified,
        @rel_dir, @mtime_ms, @size_seen
      )
      ON CONFLICT(path) DO UPDATE SET
@@ -80,10 +79,10 @@ function getUpsertStmt(): Database.Statement {
        gps_lat          = excluded.gps_lat,
        gps_lon          = excluded.gps_lon,
        date_modified    = excluded.date_modified,
-       thumbnail_path   = excluded.thumbnail_path,
        rel_dir          = excluded.rel_dir,
        mtime_ms         = excluded.mtime_ms,
-       size_seen        = excluded.size_seen`
+       size_seen        = excluded.size_seen,
+       lqip             = NULL`
   ));
 }
 
@@ -172,17 +171,12 @@ export function deletePhotoById(id: number): void {
  */
 export function clearLibrary(): void {
   const db = getDb();
-  // A managed transaction rolls back automatically on error rather than leaving
-  // a half-open one behind (which would poison every later transaction with
-  // "cannot start a transaction within a transaction").
   const clear = db.transaction(() => {
     db.prepare(`DELETE FROM duplicate_group_members`).run();
     db.prepare(`DELETE FROM duplicate_groups`).run();
     db.prepare(`DELETE FROM photos`).run();
   });
   clear();
-  // The cached stats summary is now stale (everything is zero until the rebuild),
-  // so drop it rather than serve pre-clear numbers for up to the cache TTL.
   invalidateStatsCache();
 }
 
@@ -196,10 +190,16 @@ export function bulkUpdateFileHashes(entries: Array<{ path: string; hash: string
   })();
 }
 
-export function updateThumbnailPath(id: number, thumbnailPath: string | null): void {
-  (_updateThumbStmt ??= getDb().prepare(
-    `UPDATE photos SET thumbnail_path = ? WHERE id = ?`
-  )).run(thumbnailPath, id);
+/** Store the LQIP data-URI for a photo after successful thumbnail generation. */
+export function updateLqip(id: number, lqip: string | null): void {
+  (_updateLqipStmt ??= getDb().prepare(
+    `UPDATE photos SET lqip = ? WHERE id = ?`
+  )).run(lqip, id);
+}
+
+/** Reset lqip to NULL for every photo so the thumb job regenerates all of them. */
+export function clearAllLqip(): void {
+  getDb().prepare(`UPDATE photos SET lqip = NULL`).run();
 }
 
 export function countPhotos(): number {
@@ -208,13 +208,11 @@ export function countPhotos(): number {
   }).n;
 }
 
-export function getPhotosWithMissingThumbnails(): Array<{ id: number; path: string }> {
+/** Photos that have not yet had thumbnails generated (lqip acts as the sentinel). */
+export function getPhotosWithoutThumbnails(): Array<{ id: number; path: string }> {
   return getDb()
-    .prepare(`SELECT id, path FROM photos WHERE thumbnail_path IS NULL ORDER BY date_imported DESC, id DESC`)
+    .prepare(
+      `SELECT id, path FROM photos WHERE lqip IS NULL ORDER BY date_imported DESC, id DESC`
+    )
     .all() as Array<{ id: number; path: string }>;
-}
-
-/** Reset thumbnail_path to NULL for every photo so the thumb job regenerates all of them. */
-export function clearAllThumbnailPaths(): void {
-  getDb().prepare(`UPDATE photos SET thumbnail_path = NULL`).run();
 }

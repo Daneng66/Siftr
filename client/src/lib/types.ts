@@ -4,6 +4,8 @@ export interface PhotoSummary {
   file_size: number;
   rel_dir: string;
   dup_count: number;
+  lqip: string | null;
+  mtime_ms: number;
 }
 
 export interface PhotoDetail extends PhotoSummary {
@@ -21,6 +23,7 @@ export interface PhotoDetail extends PhotoSummary {
   gps_lon: number | null;
   date_imported: string;
   date_modified: string | null;
+  mtime_ms: number;
 }
 
 /** A directory on disk that contains photos (or descends to one). */
@@ -81,6 +84,7 @@ export interface DuplicateMember {
   width: number | null;
   height: number | null;
   path: string;
+  mtime_ms: number;
 }
 
 export interface DuplicateGroup {

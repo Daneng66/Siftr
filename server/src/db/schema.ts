@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS photos (
   gps_lon           REAL,
   date_imported     TEXT NOT NULL DEFAULT (datetime('now')),
   date_modified     TEXT,
-  thumbnail_path    TEXT,
+  lqip              TEXT,
   rel_dir           TEXT NOT NULL DEFAULT '',
   mtime_ms          INTEGER NOT NULL DEFAULT 0,
   size_seen         INTEGER NOT NULL DEFAULT 0
@@ -33,7 +33,7 @@ CREATE INDEX IF NOT EXISTS idx_photos_phash ON photos(perceptual_hash);
 CREATE INDEX IF NOT EXISTS idx_photos_date_taken ON photos(exif_date_taken);
 CREATE INDEX IF NOT EXISTS idx_photos_rel_dir ON photos(rel_dir);
 CREATE INDEX IF NOT EXISTS idx_photos_rel_dir_date ON photos(rel_dir, exif_date_taken DESC);
-CREATE INDEX IF NOT EXISTS idx_photos_thumbnail_null ON photos(id) WHERE thumbnail_path IS NULL;
+CREATE INDEX IF NOT EXISTS idx_photos_lqip_null ON photos(id) WHERE lqip IS NULL;
 
 CREATE TABLE IF NOT EXISTS duplicate_groups (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,

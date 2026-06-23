@@ -1,36 +1,18 @@
-import { memo, useEffect, useRef, useState } from "react";
+import { memo } from "react";
 import type { PhotoSummary } from "../../lib/types";
 import { api } from "../../lib/api";
 import { formatBytes } from "../../lib/format";
 import { clsx } from "clsx";
-import { CheckIcon, CopyIcon, DownloadIcon, ImagesIcon, SpinnerIcon } from "../ui/icons";
+import { CheckIcon, CopyIcon, DownloadIcon } from "../ui/icons";
 
 interface Props {
   photo: PhotoSummary;
   selected: boolean;
   onClick: (e: React.MouseEvent) => void;
   onOpenDetail: () => void;
-  thumbRunning?: boolean;
-  thumbVersion?: number;
-  thumbSeed?: number;
 }
 
-function PhotoCardImpl({ photo, selected, onClick, onOpenDetail, thumbRunning = false, thumbVersion = 0, thumbSeed = 0 }: Props) {
-  const [imgError, setImgError] = useState(false);
-  const mountedThumbSeed = useRef(thumbSeed);
-
-  // When regeneration starts (thumbSeed increments past the value seen at mount),
-  // immediately clear the displayed thumbnail so stale cached images don't linger.
-  // Skipping the mount-time value avoids re-triggering the spinner state after a
-  // PhotoGrid remount when a previous regeneration has already completed.
-  useEffect(() => {
-    if (thumbSeed > mountedThumbSeed.current) setImgError(true);
-  }, [thumbSeed]);
-
-  // When the thumbnail job completes, clear the error so the img retries.
-  useEffect(() => {
-    if (thumbVersion > 0) setImgError(false);
-  }, [thumbVersion]);
+function PhotoCardImpl({ photo, selected, onClick, onOpenDetail }: Props) {
   return (
     <div
       data-photo-id={photo.id}
@@ -42,26 +24,24 @@ function PhotoCardImpl({ photo, selected, onClick, onOpenDetail, thumbRunning = 
           ? "ring-brand-500"
           : "ring-transparent hover:ring-slate-300 dark:hover:ring-slate-600"
       )}
+      style={
+        photo.lqip
+          ? {
+              backgroundImage: `url(${photo.lqip})`,
+              backgroundSize: "cover",
+              backgroundPosition: "center",
+            }
+          : undefined
+      }
     >
-      {imgError ? (
-        <div className="flex h-full w-full items-center justify-center">
-          {thumbRunning ? (
-            <SpinnerIcon className="animate-spin text-2xl text-slate-400 dark:text-slate-500" />
-          ) : (
-            <ImagesIcon className="text-3xl text-slate-300 dark:text-slate-600" />
-          )}
-        </div>
-      ) : (
-        <img
-          src={thumbSeed > 0 ? `${api.thumbnailUrl(photo.id)}?v=${thumbSeed}` : api.thumbnailUrl(photo.id)}
-          alt={photo.current_filename}
-          loading="lazy"
-          decoding="async"
-          draggable={false}
-          onError={() => setImgError(true)}
-          className="h-full w-full object-cover"
-        />
-      )}
+      <img
+        src={api.thumbnailUrl(photo.id, "s", photo.mtime_ms)}
+        alt={photo.current_filename}
+        loading="lazy"
+        decoding="async"
+        draggable={false}
+        className="h-full w-full object-cover"
+      />
 
       {/* Gradient + filename on hover */}
       <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-2 pb-1.5 pt-6 opacity-0 transition-opacity group-hover:opacity-100">
@@ -82,7 +62,7 @@ function PhotoCardImpl({ photo, selected, onClick, onOpenDetail, thumbRunning = 
         )}
       </div>
 
-      {/* File-size badge bottom-right (hidden on hover to avoid clashing) */}
+      {/* File-size badge bottom-right */}
       <span className="absolute bottom-1.5 right-1.5 rounded bg-black/55 px-1.5 py-0.5 text-[0.65rem] font-medium text-white opacity-100 transition-opacity group-hover:opacity-0">
         {formatBytes(photo.file_size)}
       </span>

@@ -9,7 +9,7 @@ import {
   setMemberStatus,
 } from "../db/duplicates";
 import { getPhotoById, deletePhotoById } from "../db/photos";
-import { deleteThumbnail } from "../scanner/thumbnails";
+import { deleteThumbnails } from "../scanner/thumbnails";
 import { moveToTrash } from "../util/trash";
 import { getDb } from "../db";
 
@@ -89,7 +89,7 @@ duplicatesRouter.post("/apply", async (req, res) => {
         continue;
       }
       deletePhotoById(photo.id); // cascades out of group membership
-      await deleteThumbnail(photo.id); // don't leave the thumbnail orphaned
+      await deleteThumbnails(photo.id); // don't leave the thumbnails orphaned
       deleted++;
     }
     // Drop groups that no longer have >= 2 members.

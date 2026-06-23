@@ -180,7 +180,7 @@ export function PhotoDetailModal() {
       <div className="grid gap-5 md:grid-cols-[1.4fr_1fr]">
         <div className="flex items-center justify-center rounded-lg bg-slate-900">
           <img
-            src={api.rawUrl(photo.id)}
+            src={api.thumbnailUrl(photo.id, "m", photo.mtime_ms)}
             alt={photo.current_filename}
             className="max-h-[60vh] w-full rounded-lg object-contain"
           />

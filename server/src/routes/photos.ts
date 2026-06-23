@@ -3,16 +3,16 @@ import fs from "node:fs";
 import path from "node:path";
 import { z } from "zod";
 import { getDb } from "../db";
-import { getPhotoById, updateThumbnailPath } from "../db/photos";
-import { makeThumbnail, thumbnailAbsPath } from "../scanner/thumbnails";
+import { getPhotoById, updateLqip } from "../db/photos";
+import { makeThumbnails, thumbnailExists, thumbPath } from "../scanner/thumbnails";
 
-// Keyed by photo ID — deduplicates concurrent requests for the same photo.
-const thumbInFlight = new Map<number, Promise<string | null>>();
+// Deduplicates concurrent thumbnail generation for the same photo.
+const thumbInFlight = new Map<number, Promise<{ lqip: string | null }>>();
 
 export const photosRouter = Router();
 
 const listQuery = z.object({
-  folder: z.string().optional(), // rel_dir of an on-disk folder
+  folder: z.string().optional(),
   duplicatesOnly: z.coerce.boolean().optional(),
   hideDuplicates: z.coerce.boolean().optional(),
   search: z.string().optional(),
@@ -39,7 +39,7 @@ const SORT_SQL: Record<string, string> = {
   imported_desc: "p.date_imported DESC",
 };
 
-/** GET /api/photos — filtered, sorted, paginated grid feed with badge counts. */
+/** GET /api/photos — filtered, sorted, paginated grid feed. */
 photosRouter.get("/", (req, res) => {
   const q = listQuery.parse(req.query);
   const where: string[] = [];
@@ -68,12 +68,10 @@ photosRouter.get("/", (req, res) => {
       .get(params) as { n: number }
   ).n;
 
-  // LEFT JOIN + GROUP BY instead of a correlated subquery per row.
-  // Only the fields used in the grid are returned; detail fields (dimensions,
-  // EXIF, mime type) are fetched lazily via GET /api/photos/:id.
   const items = db
     .prepare(
       `SELECT p.id, p.current_filename, p.file_size, p.rel_dir,
+              p.lqip, p.mtime_ms,
               COUNT(dm.photo_id) AS dup_count
          FROM photos p
          LEFT JOIN duplicate_group_members dm ON dm.photo_id = p.id
@@ -95,42 +93,41 @@ photosRouter.get("/:id", (req, res) => {
   res.json(photo);
 });
 
-/** GET /api/photos/:id/thumbnail — serves (or lazily generates) the WebP thumbnail. */
-photosRouter.get("/:id/thumbnail", async (req, res) => {
+/** GET /api/photos/:id/thumb — serves (or lazily generates) the WebP grid thumbnail. */
+photosRouter.get("/:id/thumb", async (req, res) => {
   const id = Number(req.params.id);
   const photo = getPhotoById(id);
   if (!photo) return res.status(404).json({ error: "not found" });
 
-  let thumbPath = photo.thumbnail_path;
-
-  if (!thumbPath) {
+  if (!thumbnailExists(id)) {
     let gen = thumbInFlight.get(id);
     if (!gen) {
-      gen = makeThumbnail(photo.path, id)
-        .finally(() => thumbInFlight.delete(id));
+      gen = makeThumbnails(photo.path, id).finally(() => thumbInFlight.delete(id));
       thumbInFlight.set(id, gen);
     }
-    thumbPath = await gen;
-    if (thumbPath) updateThumbnailPath(id, thumbPath);
+    const { lqip } = await gen;
+    if (lqip) updateLqip(id, lqip);
   }
 
-  if (!thumbPath) return res.status(404).json({ error: "thumbnail generation failed" });
-
-  const abs = thumbnailAbsPath(thumbPath);
-  // A 0-byte file means a previous run was interrupted mid-write — don't
-  // serve it or let the browser cache it; the next request will regenerate.
-  let size = -1;
+  const abs = thumbPath(id);
+  let fileSize = -1;
   try {
-    size = fs.statSync(abs).size;
+    fileSize = fs.statSync(abs).size;
   } catch {
-    /* missing — handled below */
+    /* missing */
   }
-  if (size <= 0) {
-    // Reset the DB so next request regenerates rather than looking for a missing file.
-    updateThumbnailPath(id, null);
-    return res.status(404).json({ error: "thumbnail missing" });
+  if (fileSize <= 0) {
+    return res.status(404).json({ error: "thumbnail generation failed" });
   }
-  res.setHeader("Cache-Control", "public, max-age=86400");
+
+  // Versioned URLs (via ?v=mtime_ms) are immutable for the lifetime of the file.
+  // Unversioned requests get a short TTL.
+  const versioned = req.query.v !== undefined;
+  res.setHeader(
+    "Cache-Control",
+    versioned ? "public, immutable, max-age=31536000" : "public, max-age=3600"
+  );
+  res.setHeader("ETag", `"${photo.mtime_ms}"`);
   res.sendFile(abs);
 });
 

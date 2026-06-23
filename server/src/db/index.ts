@@ -54,6 +54,14 @@ function migrate(db: Database.Database): void {
     DROP TABLE IF EXISTS tags;
     DROP TABLE IF EXISTS folders;
   `);
+
+  // Add lqip column for Low Quality Image Placeholder (base64 data-URI).
+  if (!columnExists(db, "photos", "lqip")) {
+    db.exec(`ALTER TABLE photos ADD COLUMN lqip TEXT`);
+  }
+  db.exec(
+    `CREATE INDEX IF NOT EXISTS idx_photos_lqip_null ON photos(id) WHERE lqip IS NULL`
+  );
 }
 
 /** Open (once) the SQLite database and apply the schema. */

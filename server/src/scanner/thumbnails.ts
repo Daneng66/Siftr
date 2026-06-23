@@ -4,51 +4,16 @@ import { randomUUID } from "node:crypto";
 import sharp from "sharp";
 import { config } from "../config";
 
-/**
- * Generate a WebP thumbnail for a file, named by photo ID. Returns the
- * filename (relative to thumbsDir), or null on failure.
- */
-export async function makeThumbnail(
-  filePath: string,
-  id: number
-): Promise<string | null> {
-  const name = `${id}.webp`;
-  const out = path.join(config.thumbsDir, name);
-  try {
-    // Reuse an existing, non-empty thumbnail — duplicates share one file by
-    // hash. A 0-byte file means a previous run was interrupted mid-write, so
-    // treat it as missing and regenerate.
-    if (existsNonEmpty(out)) return name;
-
-    // Write to a unique temp file, then atomically rename into place. Without
-    // this, a concurrent worker (or an HTTP request) could observe the final
-    // path while sharp is still flushing bytes and treat a 0-byte file as a
-    // finished thumbnail — which then gets cached by the browser for a day.
-    const tmp = path.join(
-      config.thumbsDir,
-      `.${id}.${process.pid}.${randomUUID()}.tmp`
-    );
-    try {
-      await sharp(filePath, { failOn: "none" })
-        .rotate()
-        .resize(config.thumbSize, config.thumbSize, {
-          fit: "inside",
-          withoutEnlargement: true,
-        })
-        .webp({ quality: 78 })
-        .toFile(tmp);
-      await fs.promises.rename(tmp, out);
-    } catch (err) {
-      await fs.promises.rm(tmp, { force: true }).catch(() => {});
-      throw err;
-    }
-    return name;
-  } catch {
-    return null;
-  }
+/** Shard directory for a photo: {thumbsDir}/{id % 256} */
+function thumbDir(id: number): string {
+  return path.join(config.thumbsDir, String(id % 256));
 }
 
-/** True if the path exists and has a non-zero size. */
+/** Absolute path for a photo's grid thumbnail. */
+export function thumbPath(id: number): string {
+  return path.join(thumbDir(id), `${id}.webp`);
+}
+
 function existsNonEmpty(p: string): boolean {
   try {
     return fs.statSync(p).size > 0;
@@ -57,35 +22,78 @@ function existsNonEmpty(p: string): boolean {
   }
 }
 
-export function thumbnailAbsPath(name: string): string {
-  return path.join(config.thumbsDir, name);
+export function thumbnailExists(id: number): boolean {
+  return existsNonEmpty(thumbPath(id));
 }
 
 /**
- * Remove the cached thumbnail for a photo id, if one exists. Best-effort: the
- * file is named deterministically (`{id}.webp`), so we can clean it up by id
- * without consulting the DB. Called when a photo is deleted/pruned so its
- * thumbnail doesn't linger as an orphan.
+ * Generate the grid WebP thumbnail and a LQIP for a photo.
+ *
+ * Single Sharp decode: the source is decoded and downscaled to the grid size
+ * once (as raw pixels), then that buffer produces both the WebP and the tiny
+ * LQIP without re-reading the file.
+ *
+ * The WebP is written atomically (temp → rename). Returns the LQIP as a
+ * base64 data-URI string, or null on failure.
  */
-export async function deleteThumbnail(id: number): Promise<void> {
-  await fs.promises
-    .rm(path.join(config.thumbsDir, `${id}.webp`), { force: true })
-    .catch(() => {});
+export async function makeThumbnails(
+  filePath: string,
+  id: number
+): Promise<{ lqip: string | null }> {
+  const dir = thumbDir(id);
+  const out = thumbPath(id);
+
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+
+    // Decode once: rotate for EXIF orientation, resize to grid size, raw pixels.
+    const { data, info } = await sharp(filePath, { failOn: "none" })
+      .rotate()
+      .resize(config.thumbSize, config.thumbSize, {
+        fit: "inside",
+        withoutEnlargement: true,
+      })
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+
+    const rawInput = {
+      raw: { width: info.width, height: info.height, channels: info.channels as 1 | 2 | 3 | 4 },
+    };
+
+    const [webpBuf, lqipBuf] = await Promise.all([
+      sharp(data, rawInput).webp({ quality: 80 }).toBuffer(),
+      sharp(data, rawInput)
+        .resize(20, 20, { fit: "inside", withoutEnlargement: true })
+        .jpeg({ quality: 10 })
+        .toBuffer(),
+    ]);
+
+    const tmp = path.join(dir, `.${id}.${process.pid}.${randomUUID()}.tmp`);
+    try {
+      await fs.promises.writeFile(tmp, webpBuf);
+      await fs.promises.rename(tmp, out);
+    } catch (err) {
+      await fs.promises.rm(tmp, { force: true }).catch(() => {});
+      throw err;
+    }
+
+    return { lqip: `data:image/jpeg;base64,${lqipBuf.toString("base64")}` };
+  } catch {
+    return { lqip: null };
+  }
 }
 
-/** Delete every cached thumbnail. Used by a hard scan before regenerating. */
+/** Remove the thumbnail for a photo. Best-effort. */
+export async function deleteThumbnail(id: number): Promise<void> {
+  await fs.promises.rm(thumbPath(id), { force: true }).catch(() => {});
+}
+
+/** Delete every cached thumbnail by removing and recreating the thumbnails dir. */
 export async function clearThumbnails(): Promise<void> {
-  let entries: string[];
   try {
-    entries = await fs.promises.readdir(config.thumbsDir);
+    await fs.promises.rm(config.thumbsDir, { recursive: true, force: true });
   } catch {
-    return; // dir doesn't exist yet — nothing to clear
+    // ignore
   }
-  await Promise.all(
-    entries
-      .filter((name) => name.endsWith(".webp"))
-      .map((name) =>
-        fs.promises.rm(path.join(config.thumbsDir, name)).catch(() => {})
-      )
-  );
+  fs.mkdirSync(config.thumbsDir, { recursive: true });
 }

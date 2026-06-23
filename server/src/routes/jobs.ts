@@ -2,7 +2,7 @@ import { Router } from "express";
 import { jobs } from "../jobs";
 import { runThumbnailJob, scanLibrary } from "../scanner";
 import { runDedup } from "../dedup/czkawka";
-import { clearAllThumbnailPaths } from "../db/photos";
+import { clearAllLqip } from "../db/photos";
 import { clearThumbnails } from "../scanner/thumbnails";
 
 export const jobsRouter = Router();
@@ -73,7 +73,7 @@ scanRouter.post("/thumbnails", async (req, res) => {
   if (jobs.isRunning("thumb")) {
     return res.status(409).json({ error: "thumbnail job already running" });
   }
-  clearAllThumbnailPaths();
+  clearAllLqip();
   await clearThumbnails();
   runThumbnailJob(true).catch((err) => console.error("[thumb] regenerate failed:", err));
   res.status(202).json({ started: true });

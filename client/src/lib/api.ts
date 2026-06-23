@@ -39,7 +39,10 @@ export interface PhotoQuery {
 }
 
 export const api = {
-  thumbnailUrl: (id: number) => `/api/photos/${id}/thumbnail`,
+  thumbnailUrl: (id: number, mtime_ms?: number) =>
+    mtime_ms !== undefined
+      ? `/api/photos/${id}/thumb?v=${mtime_ms}`
+      : `/api/photos/${id}/thumb`,
   rawUrl: (id: number, download = false) =>
     `/api/photos/${id}/raw${download ? "?download=1" : ""}`,
 

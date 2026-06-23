@@ -6,16 +6,16 @@ import { config, IMAGE_EXTENSIONS } from "../config";
 import { mapLimit } from "../util/concurrency";
 import { relDir } from "../util/relpath";
 import { readExif } from "./exif";
-import { clearThumbnails, deleteThumbnail, makeThumbnail } from "./thumbnails";
+import { clearThumbnails, deleteThumbnail, makeThumbnails } from "./thumbnails";
 import {
   batchDeletePhotos,
   beginBatch,
   clearLibrary,
   commitBatch,
   getIndexedPaths,
-  getPhotosWithMissingThumbnails,
+  getPhotosWithoutThumbnails,
   rollbackBatch,
-  updateThumbnailPath,
+  updateLqip,
   upsertPhoto,
 } from "../db/photos";
 import { jobs } from "../jobs";
@@ -98,7 +98,6 @@ async function indexFile(filePath: string, stat: fs.Stats): Promise<void> {
     gps_lat: exif.gpsLat,
     gps_lon: exif.gpsLon,
     date_modified: new Date(stat.mtimeMs).toISOString(),
-    thumbnail_path: null,
     rel_dir: relDir(filePath),
     mtime_ms: Math.floor(stat.mtimeMs),
     size_seen: stat.size,
@@ -233,7 +232,7 @@ export async function scanLibrary(mode: ScanMode = "soft"): Promise<ScanResult> 
  * all thumbnails are ready.
  */
 export async function runThumbnailJob(regenerate = false): Promise<void> {
-  const photos = getPhotosWithMissingThumbnails();
+  const photos = getPhotosWithoutThumbnails();
   if (photos.length === 0) return;
 
   const job = jobs.create("thumb", "Generating thumbnails…", { regenerate });
@@ -243,8 +242,8 @@ export async function runThumbnailJob(regenerate = false): Promise<void> {
     for (let i = 0; i < photos.length; i += SCAN_BATCH_SIZE) {
       const chunk = photos.slice(i, i + SCAN_BATCH_SIZE);
       await mapLimit(chunk, config.scanConcurrency, async ({ id, path }) => {
-        const thumbPath = await makeThumbnail(path, id);
-        if (thumbPath) updateThumbnailPath(id, thumbPath);
+        const { lqip } = await makeThumbnails(path, id);
+        updateLqip(id, lqip);
         done++;
       });
       jobs.update(job.id, { progress: done });

@@ -4,10 +4,10 @@ import path from "node:path";
 import { z } from "zod";
 import { getDb } from "../db";
 import { getPhotoById, updateLqip } from "../db/photos";
-import { makeThumbnails, thumbnailExists, thumbPath, type ThumbSize } from "../scanner/thumbnails";
+import { makeThumbnails, thumbnailExists, thumbPath } from "../scanner/thumbnails";
 
-// Deduplicates concurrent thumbnail generation for the same photo+size.
-const thumbInFlight = new Map<string, Promise<{ lqip: string | null }>>();
+// Deduplicates concurrent thumbnail generation for the same photo.
+const thumbInFlight = new Map<number, Promise<{ lqip: string | null }>>();
 
 export const photosRouter = Router();
 
@@ -93,31 +93,23 @@ photosRouter.get("/:id", (req, res) => {
   res.json(photo);
 });
 
-/** GET /api/photos/:id/thumb/:size — serves (or lazily generates) a WebP thumbnail. */
-photosRouter.get("/:id/thumb/:size", async (req, res) => {
+/** GET /api/photos/:id/thumb — serves (or lazily generates) the WebP grid thumbnail. */
+photosRouter.get("/:id/thumb", async (req, res) => {
   const id = Number(req.params.id);
-  const size = req.params.size as ThumbSize;
-  if (size !== "s" && size !== "m") {
-    return res.status(400).json({ error: "size must be s or m" });
-  }
-
   const photo = getPhotoById(id);
   if (!photo) return res.status(404).json({ error: "not found" });
 
-  // Generate thumbnails on demand if the small file is missing (both sizes are
-  // always generated together, so checking one size suffices).
-  if (!thumbnailExists(id, "s")) {
-    const key = String(id);
-    let gen = thumbInFlight.get(key);
+  if (!thumbnailExists(id)) {
+    let gen = thumbInFlight.get(id);
     if (!gen) {
-      gen = makeThumbnails(photo.path, id).finally(() => thumbInFlight.delete(key));
-      thumbInFlight.set(key, gen);
+      gen = makeThumbnails(photo.path, id).finally(() => thumbInFlight.delete(id));
+      thumbInFlight.set(id, gen);
     }
     const { lqip } = await gen;
     if (lqip) updateLqip(id, lqip);
   }
 
-  const abs = thumbPath(id, size);
+  const abs = thumbPath(id);
   let fileSize = -1;
   try {
     fileSize = fs.statSync(abs).size;
@@ -129,13 +121,11 @@ photosRouter.get("/:id/thumb/:size", async (req, res) => {
   }
 
   // Versioned URLs (via ?v=mtime_ms) are immutable for the lifetime of the file.
-  // Unversioned requests (manual/direct access) get a short TTL.
+  // Unversioned requests get a short TTL.
   const versioned = req.query.v !== undefined;
   res.setHeader(
     "Cache-Control",
-    versioned
-      ? "public, immutable, max-age=31536000"
-      : "public, max-age=3600"
+    versioned ? "public, immutable, max-age=31536000" : "public, max-age=3600"
   );
   res.setHeader("ETag", `"${photo.mtime_ms}"`);
   res.sendFile(abs);

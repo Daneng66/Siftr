@@ -6,7 +6,7 @@ import { config, IMAGE_EXTENSIONS } from "../config";
 import { mapLimit } from "../util/concurrency";
 import { relDir } from "../util/relpath";
 import { readExif } from "./exif";
-import { clearThumbnails, deleteThumbnails, makeThumbnails } from "./thumbnails";
+import { clearThumbnails, deleteThumbnail, makeThumbnails } from "./thumbnails";
 import {
   batchDeletePhotos,
   beginBatch,
@@ -207,7 +207,7 @@ export async function scanLibrary(mode: ScanMode = "soft"): Promise<ScanResult> 
       }
     }
     batchDeletePhotos(toDelete);
-    await Promise.all(removedIds.map((id) => deleteThumbnails(id)));
+    await Promise.all(removedIds.map((id) => deleteThumbnail(id)));
 
     jobs.update(job.id, {
       progress: files.length,

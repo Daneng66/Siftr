@@ -23,7 +23,6 @@ export interface PhotoDetail extends PhotoSummary {
   gps_lon: number | null;
   date_imported: string;
   date_modified: string | null;
-  mtime_ms: number;
 }
 
 /** A directory on disk that contains photos (or descends to one). */

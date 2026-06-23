@@ -35,7 +35,7 @@ function PhotoCardImpl({ photo, selected, onClick, onOpenDetail }: Props) {
       }
     >
       <img
-        src={api.thumbnailUrl(photo.id, "s", photo.mtime_ms)}
+        src={api.thumbnailUrl(photo.id, photo.mtime_ms)}
         alt={photo.current_filename}
         loading="lazy"
         decoding="async"

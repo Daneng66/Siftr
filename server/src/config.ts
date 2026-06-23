@@ -55,10 +55,7 @@ export const config = {
   scanConcurrency: Number(
     process.env.SCAN_CONCURRENCY ?? Math.max(4, Math.floor(os.cpus().length / 2))
   ),
-  thumbSizes: {
-    s: Number(process.env.THUMB_SIZE_S ?? 240),
-    m: Number(process.env.THUMB_SIZE_M ?? 720),
-  },
+  thumbSize: Number(process.env.THUMB_SIZE ?? 240),
 
   /** Run an automatic scan of the photos directory on startup. */
   scanOnStartup: process.env.SCAN_ON_STARTUP !== "false",

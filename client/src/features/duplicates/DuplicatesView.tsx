@@ -111,7 +111,7 @@ function GroupCard({
             <div
               key={m.photo_id}
               className={clsx(
-                "w-48 overflow-hidden rounded-lg border-2 transition-colors",
+                "w-full overflow-hidden rounded-lg border-2 transition-colors sm:w-48",
                 st === "kept" && "border-emerald-500",
                 st === "recommended" && "border-amber-500",
                 st === "marked_for_deletion" && "border-red-500 opacity-70",
@@ -268,7 +268,7 @@ export function DuplicatesView() {
   };
 
   return (
-    <div className="scroll-area h-full overflow-y-auto p-5">
+    <div className="scroll-area h-full overflow-y-auto p-3 sm:p-5">
       <div className="mb-5">
         <h1 className="text-xl font-bold">Duplicates</h1>
         <p className="text-sm text-slate-500">
@@ -280,7 +280,7 @@ export function DuplicatesView() {
 
       {/* Bulk actions — only shown when there are groups to act on */}
       {groups.length > 0 && !isLoading && (
-        <div className="mb-4 flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 dark:border-slate-700 dark:bg-slate-800/50">
+        <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 sm:px-4 sm:py-2.5 dark:border-slate-700 dark:bg-slate-800/50">
           <span className="mr-auto text-sm font-medium text-slate-600 dark:text-slate-300">
             Bulk actions
           </span>

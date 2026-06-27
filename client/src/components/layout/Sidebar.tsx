@@ -3,7 +3,7 @@ import { useFolders, useHardScanRunning, useStats } from "../../hooks/queries";
 import { useUi } from "../../store/ui";
 import { formatBytes } from "../../lib/format";
 import type { FilterState, Folder } from "../../lib/types";
-import { FolderIcon, ImagesIcon, CopyIcon, ChatIcon } from "../ui/icons";
+import { FolderIcon, ImagesIcon, CopyIcon, ChatIcon, MoonIcon, SunIcon, XIcon } from "../ui/icons";
 import { clsx } from "clsx";
 
 function StatRow({ label, value }: { label: string; value: string | number }) {
@@ -70,15 +70,16 @@ function buildTree(folders: Folder[]): FolderNode[] {
 }
 
 function FolderTree({ nodes, depth = 0 }: { nodes: FolderNode[]; depth?: number }) {
-  const { filter, setFilter } = useUi();
+  const { filter, setFilter, setSidebarOpen } = useUi();
   return (
     <>
       {nodes.map((node) => (
         <div key={node.path}>
           <button
-            onClick={() =>
-              setFilter({ kind: "folder", path: node.path, name: node.name })
-            }
+            onClick={() => {
+              setFilter({ kind: "folder", path: node.path, name: node.name });
+              setSidebarOpen(false);
+            }}
             style={{ paddingLeft: `${0.625 + depth * 0.85}rem` }}
             className={clsx(
               "flex w-full items-center gap-2 rounded-lg py-1.5 pr-2.5 text-sm transition-colors",
@@ -103,7 +104,7 @@ function FolderTree({ nodes, depth = 0 }: { nodes: FolderNode[]; depth?: number 
 }
 
 export function Sidebar() {
-  const { filter, setFilter, setView } = useUi();
+  const { filter, setFilter, setView, sidebarOpen, setSidebarOpen, theme, toggleTheme } = useUi();
   const { data: stats } = useStats();
   const { data: foldersData } = useFolders();
   const hardScanRunning = useHardScanRunning();
@@ -121,10 +122,38 @@ export function Sidebar() {
   const select = (f: FilterState) => {
     setFilter(f);
     setView("library");
+    setSidebarOpen(false);
   };
 
   return (
-    <aside className="scroll-area flex w-64 shrink-0 flex-col gap-5 overflow-y-auto border-r border-slate-200 bg-white px-3 py-4 dark:border-slate-800 dark:bg-slate-900">
+    <aside
+      className={clsx(
+        "scroll-area flex w-64 shrink-0 flex-col gap-5 overflow-y-auto border-r border-slate-200 bg-white px-3 py-4 dark:border-slate-800 dark:bg-slate-900",
+        // Mobile: fixed overlay with slide-in transition
+        "fixed inset-y-0 left-0 z-50 transition-transform duration-300 ease-in-out md:relative md:inset-auto md:z-auto md:translate-x-0 md:transition-none",
+        sidebarOpen ? "translate-x-0" : "-translate-x-full"
+      )}
+    >
+      <div className="flex items-center justify-between md:hidden">
+        <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Menu</span>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={toggleTheme}
+            className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+            aria-label="Toggle theme"
+          >
+            {theme === "dark" ? <SunIcon className="text-base" /> : <MoonIcon className="text-base" />}
+          </button>
+          <button
+            onClick={() => setSidebarOpen(false)}
+            className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+            aria-label="Close sidebar"
+          >
+            <XIcon className="text-base" />
+          </button>
+        </div>
+      </div>
+
       <section className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
         <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
           Library

@@ -182,7 +182,7 @@ export function PhotoDetailModal() {
           <img
             src={api.rawUrl(photo.id)}
             alt={photo.current_filename}
-            className="max-h-[60vh] w-full rounded-lg object-contain"
+            className="max-h-[40vh] w-full rounded-lg object-contain sm:max-h-[60vh]"
           />
         </div>
         <div className="space-y-3 overflow-y-auto">
@@ -218,7 +218,7 @@ export function PhotoDetailModal() {
 
           {hasCoords && (
             <div className="space-y-1">
-              <div className="h-48 overflow-hidden rounded-lg">
+              <div className="h-36 overflow-hidden rounded-lg sm:h-48">
                 <MapContainer
                   center={[lat, lon]}
                   zoom={13}

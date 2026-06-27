@@ -14,6 +14,7 @@ import {
   CopyIcon,
   CheckIcon,
   ChevronDownIcon,
+  MenuIcon,
   MoonIcon,
   ScanIcon,
   SpinnerIcon,
@@ -171,7 +172,7 @@ function TrashMenu() {
 }
 
 export function TopNav() {
-  const { theme, toggleTheme, view, setView, search, setSearch } = useUi();
+  const { theme, toggleTheme, view, setView, search, setSearch, toggleSidebar } = useUi();
   const invalidate = useInvalidateLibrary();
   const reset = useResetLibrary();
   const [searchInput, setSearchInput] = useState(search);
@@ -246,6 +247,13 @@ export function TopNav() {
 
   return (
     <header className="z-20 flex h-14 shrink-0 items-center gap-4 border-b border-slate-200 bg-white px-4 dark:border-slate-800 dark:bg-slate-900">
+      <button
+        onClick={toggleSidebar}
+        className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 md:hidden dark:hover:bg-slate-800"
+        aria-label="Toggle sidebar"
+      >
+        <MenuIcon className="text-lg" />
+      </button>
       <div className="flex items-center gap-2">
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-600 font-bold text-white">
           S
@@ -253,7 +261,7 @@ export function TopNav() {
         <span className="text-lg font-bold tracking-tight">Siftr</span>
       </div>
 
-      <nav className="flex items-center gap-1">
+      <nav className="hidden items-center gap-1 md:flex">
         <NavLink
           active={view === "library"}
           onClick={() => setView("library")}
@@ -268,7 +276,7 @@ export function TopNav() {
         />
       </nav>
 
-      <div className="flex flex-1 justify-center px-4">
+      <div className="flex flex-1 justify-center px-1 md:px-4">
         <input
           value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)}
@@ -279,7 +287,7 @@ export function TopNav() {
 
       <div className="flex items-center gap-2">
         {activeJob && (
-          <span className="text-xs text-slate-500">
+          <span className="hidden text-xs text-slate-500 md:block">
             {activeJob.message ||
               `${activeJob.type}… ${activeJob.progress}/${activeJob.total}`}
           </span>
@@ -287,7 +295,7 @@ export function TopNav() {
         <TrashMenu />
         <button
           onClick={toggleTheme}
-          className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+          className="hidden rounded-lg p-2 text-slate-500 hover:bg-slate-100 md:flex dark:hover:bg-slate-800"
           aria-label="Toggle theme"
         >
           {theme === "dark" ? <SunIcon className="text-lg" /> : <MoonIcon className="text-lg" />}
@@ -441,7 +449,7 @@ export function TopNav() {
       {scanToast && (
         <div
           role="status"
-          className={`fixed bottom-4 right-4 z-50 flex max-w-sm items-start gap-2 rounded-lg border px-3.5 py-2.5 text-sm shadow-lg ${
+          className={`fixed bottom-4 left-4 right-4 z-50 flex items-start gap-2 rounded-lg border px-3.5 py-2.5 text-sm shadow-lg sm:left-auto sm:right-4 sm:max-w-sm ${
             scanToast.error
               ? "border-red-200 bg-red-50 text-red-800 dark:border-red-900/60 dark:bg-red-950/60 dark:text-red-200"
               : "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/60 dark:text-emerald-200"

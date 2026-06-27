@@ -43,8 +43,8 @@ function PhotoCardImpl({ photo, selected, onClick, onOpenDetail }: Props) {
         className="h-full w-full object-cover"
       />
 
-      {/* Gradient + filename on hover */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-2 pb-1.5 pt-6 opacity-0 transition-opacity group-hover:opacity-100">
+      {/* Gradient + filename on hover (always visible on touch devices) */}
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-2 pb-1.5 pt-6 opacity-0 transition-opacity group-hover:opacity-100 [@media(hover:none)]:opacity-100">
         <p className="truncate text-xs font-medium text-white">
           {photo.current_filename}
         </p>
@@ -54,7 +54,7 @@ function PhotoCardImpl({ photo, selected, onClick, onOpenDetail }: Props) {
       <div className="absolute left-1.5 top-1.5 flex flex-wrap gap-1">
         {photo.dup_count > 0 && (
           <span
-            className="inline-flex items-center gap-0.5 rounded bg-amber-500/90 px-1.5 py-0.5 text-[0.65rem] font-semibold text-white"
+            className="inline-flex items-center gap-0.5 rounded bg-amber-500/90 px-1.5 py-0.5 text-xs font-semibold text-white"
             title="In a duplicate group"
           >
             <CopyIcon className="text-[0.7rem]" /> dup
@@ -63,24 +63,24 @@ function PhotoCardImpl({ photo, selected, onClick, onOpenDetail }: Props) {
       </div>
 
       {/* File-size badge bottom-right */}
-      <span className="absolute bottom-1.5 right-1.5 rounded bg-black/55 px-1.5 py-0.5 text-[0.65rem] font-medium text-white opacity-100 transition-opacity group-hover:opacity-0">
+      <span className="absolute bottom-1.5 right-1.5 rounded bg-black/55 px-1.5 py-0.5 text-xs font-medium text-white opacity-100 transition-opacity group-hover:opacity-0 [@media(hover:none)]:hidden">
         {formatBytes(photo.file_size)}
       </span>
 
-      {/* Selection checkmark */}
+      {/* Selection checkmark — always visible on touch devices */}
       <div
         className={clsx(
-          "absolute right-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full border-2 transition-all",
+          "absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-full border-2 transition-all",
           selected
             ? "border-brand-500 bg-brand-500 text-white"
-            : "border-white/80 bg-black/30 text-transparent opacity-0 group-hover:opacity-100"
+            : "border-white/80 bg-black/30 text-transparent opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
         )}
       >
         <CheckIcon className="text-xs" />
       </div>
 
-      {/* Hover quick actions */}
-      <div className="absolute inset-x-0 top-0 flex justify-center gap-1.5 p-1.5 opacity-0 transition-opacity group-hover:opacity-100">
+      {/* Quick actions — always visible on touch devices */}
+      <div className="absolute inset-x-0 top-0 flex justify-center gap-1.5 p-1.5 opacity-0 transition-opacity group-hover:opacity-100 [@media(hover:none)]:opacity-100">
         <a
           href={api.rawUrl(photo.id, true)}
           onClick={(e) => e.stopPropagation()}

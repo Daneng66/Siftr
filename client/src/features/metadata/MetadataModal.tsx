@@ -90,15 +90,17 @@ export function MetadataModal({
     type?: string;
     placeholder?: string;
   }) => (
-    <div className="flex items-center gap-3">
-      <input
-        type="checkbox"
-        checked={state.enabled}
-        onChange={(e) => set({ ...state, enabled: e.target.checked })}
-        className="h-4 w-4 accent-brand-600"
-        title="Write this field"
-      />
-      <label className="w-28 shrink-0 text-sm font-medium">{label}</label>
+    <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">
+      <div className="flex items-center gap-2">
+        <input
+          type="checkbox"
+          checked={state.enabled}
+          onChange={(e) => set({ ...state, enabled: e.target.checked })}
+          className="h-4 w-4 shrink-0 accent-brand-600"
+          title="Write this field"
+        />
+        <label className="text-sm font-medium sm:w-28 sm:shrink-0">{label}</label>
+      </div>
       <input
         type={type}
         value={state.value}

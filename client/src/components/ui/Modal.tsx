@@ -30,18 +30,22 @@ export function Modal({
   if (!open) return null;
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      className={`fixed inset-0 z-50 flex bg-black/50 ${
+        wide
+          ? "items-end sm:items-center sm:p-4"
+          : "items-center justify-center p-4"
+      }`}
       onMouseDown={onClose}
     >
       <div
-        className={`flex w-full ${
-          tall ? "min-h-[24rem] max-h-[90vh]" : "max-h-[90vh]"
-        } ${
-          wide ? "max-w-5xl" : "max-w-lg"
-        } flex-col overflow-hidden rounded-xl bg-white shadow-2xl dark:bg-slate-900`}
+        className={`flex w-full flex-col overflow-hidden bg-white shadow-2xl dark:bg-slate-900 ${
+          wide
+            ? "h-[92dvh] rounded-t-2xl sm:h-auto sm:max-h-[90vh] sm:max-w-5xl sm:rounded-xl"
+            : `rounded-xl max-w-[calc(100vw-2rem)] sm:max-w-lg ${tall ? "min-h-[24rem]" : ""} max-h-[90vh]`
+        }`}
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3.5 dark:border-slate-700">
+        <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3 sm:px-5 sm:py-3.5 dark:border-slate-700">
           <h2 className="text-base font-semibold">{title}</h2>
           <button
             onClick={onClose}
@@ -52,7 +56,7 @@ export function Modal({
           </button>
         </div>
         <div
-          className={`px-5 py-4 ${
+          className={`px-4 py-4 sm:px-5 ${
             tall
               ? "flex min-h-0 flex-1 flex-col overflow-hidden"
               : "scroll-area flex-1 overflow-y-auto"
@@ -61,7 +65,7 @@ export function Modal({
           {children}
         </div>
         {footer && (
-          <div className="flex justify-end gap-2 border-t border-slate-200 px-5 py-3 dark:border-slate-700">
+          <div className="flex flex-wrap justify-end gap-2 border-t border-slate-200 px-4 py-3 sm:px-5 dark:border-slate-700">
             {footer}
           </div>
         )}

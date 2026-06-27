@@ -121,8 +121,8 @@ export function RenameModal({
           </p>
         )}
 
-        <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border border-slate-200 dark:border-slate-700">
-          <table className="w-full text-sm">
+        <div className="min-h-0 flex-1 overflow-x-auto overflow-y-auto rounded-lg border border-slate-200 dark:border-slate-700">
+          <table className="w-full min-w-[320px] text-sm">
             <thead className="sticky top-0 z-10 bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-400 dark:bg-slate-800">
               <tr>
                 <th className="px-3 py-2 font-medium">Current</th>

@@ -23,10 +23,10 @@ export function BulkActionBar({
         </span>
         <div className="mx-0.5 h-6 w-px bg-slate-200 dark:bg-slate-700" />
         <Button variant="ghost" onClick={onRename}>
-          <TextIcon /> Rename
+          <TextIcon /> <span className="hidden sm:inline">Rename</span>
         </Button>
         <Button variant="ghost" onClick={onMetadata}>
-          <PencilIcon /> Metadata
+          <PencilIcon /> <span className="hidden sm:inline">Metadata</span>
         </Button>
         <div className="mx-0.5 h-6 w-px bg-slate-200 dark:bg-slate-700" />
         <Button variant="ghost" onClick={onClear} aria-label="Clear selection">

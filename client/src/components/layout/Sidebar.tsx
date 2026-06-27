@@ -3,7 +3,7 @@ import { useFolders, useHardScanRunning, useStats } from "../../hooks/queries";
 import { useUi } from "../../store/ui";
 import { formatBytes } from "../../lib/format";
 import type { FilterState, Folder } from "../../lib/types";
-import { FolderIcon, ImagesIcon, CopyIcon, ChatIcon, XIcon } from "../ui/icons";
+import { FolderIcon, ImagesIcon, CopyIcon, ChatIcon, MoonIcon, SunIcon, XIcon } from "../ui/icons";
 import { clsx } from "clsx";
 
 function StatRow({ label, value }: { label: string; value: string | number }) {
@@ -104,7 +104,7 @@ function FolderTree({ nodes, depth = 0 }: { nodes: FolderNode[]; depth?: number 
 }
 
 export function Sidebar() {
-  const { filter, setFilter, setView, sidebarOpen, setSidebarOpen } = useUi();
+  const { filter, setFilter, setView, sidebarOpen, setSidebarOpen, theme, toggleTheme } = useUi();
   const { data: stats } = useStats();
   const { data: foldersData } = useFolders();
   const hardScanRunning = useHardScanRunning();
@@ -136,13 +136,22 @@ export function Sidebar() {
     >
       <div className="flex items-center justify-between md:hidden">
         <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Menu</span>
-        <button
-          onClick={() => setSidebarOpen(false)}
-          className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
-          aria-label="Close sidebar"
-        >
-          <XIcon className="text-base" />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={toggleTheme}
+            className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+            aria-label="Toggle theme"
+          >
+            {theme === "dark" ? <SunIcon className="text-base" /> : <MoonIcon className="text-base" />}
+          </button>
+          <button
+            onClick={() => setSidebarOpen(false)}
+            className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+            aria-label="Close sidebar"
+          >
+            <XIcon className="text-base" />
+          </button>
+        </div>
       </div>
 
       <section className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">

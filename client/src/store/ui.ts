@@ -20,6 +20,9 @@ interface UiState {
   setSearch: (s: string) => void;
   detailPhotoId: number | null;
   setDetailPhotoId: (id: number | null) => void;
+  sidebarOpen: boolean;
+  setSidebarOpen: (open: boolean) => void;
+  toggleSidebar: () => void;
 }
 
 export const useUi = create<UiState>((set) => ({
@@ -45,6 +48,9 @@ export const useUi = create<UiState>((set) => ({
   setSearch: (search) => set({ search }),
   detailPhotoId: null,
   setDetailPhotoId: (detailPhotoId) => set({ detailPhotoId }),
+  sidebarOpen: false,
+  setSidebarOpen: (sidebarOpen) => set({ sidebarOpen }),
+  toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
 }));
 
 /** Translate a UI filter into photo-list query params. */

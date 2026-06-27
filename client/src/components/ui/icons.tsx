@@ -114,3 +114,8 @@ export const SpinnerIcon = (p: IconProps) => (
     <path d="M21 12a9 9 0 1 1-6.219-8.56" />
   </Svg>
 );
+export const MenuIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M4 6h16M4 12h16M4 18h16" />
+  </Svg>
+);

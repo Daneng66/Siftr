@@ -14,6 +14,7 @@ import {
   CopyIcon,
   CheckIcon,
   ChevronDownIcon,
+  MenuIcon,
   MoonIcon,
   ScanIcon,
   SpinnerIcon,
@@ -171,7 +172,7 @@ function TrashMenu() {
 }
 
 export function TopNav() {
-  const { theme, toggleTheme, view, setView, search, setSearch } = useUi();
+  const { theme, toggleTheme, view, setView, search, setSearch, toggleSidebar } = useUi();
   const invalidate = useInvalidateLibrary();
   const reset = useResetLibrary();
   const [searchInput, setSearchInput] = useState(search);
@@ -246,6 +247,13 @@ export function TopNav() {
 
   return (
     <header className="z-20 flex h-14 shrink-0 items-center gap-4 border-b border-slate-200 bg-white px-4 dark:border-slate-800 dark:bg-slate-900">
+      <button
+        onClick={toggleSidebar}
+        className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 md:hidden dark:hover:bg-slate-800"
+        aria-label="Toggle sidebar"
+      >
+        <MenuIcon className="text-lg" />
+      </button>
       <div className="flex items-center gap-2">
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-600 font-bold text-white">
           S

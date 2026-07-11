@@ -1,21 +1,25 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../lib/api";
 import {
   useDuplicates,
+  useFolders,
   useInvalidateLibrary,
   useJobsSnapshot,
 } from "../../hooks/queries";
 import { Button, Modal } from "../../components/ui/Modal";
 import { formatBytes } from "../../lib/format";
-import { CheckIcon, CopyIcon, ScanIcon, SpinnerIcon, StarIcon, TrashIcon } from "../../components/ui/icons";
+import { CheckIcon, CopyIcon, FolderIcon, ScanIcon, SpinnerIcon, StarIcon, TrashIcon } from "../../components/ui/icons";
 import type { DuplicateGroup, DupStatus } from "../../lib/types";
+import { findPatternMatches } from "../../lib/namePattern";
 import { clsx } from "clsx";
 
 function GroupCard({
   group,
+  nameMatches,
   onStatusChange,
 }: {
   group: DuplicateGroup;
+  nameMatches?: Set<number>;
   onStatusChange?: (status: Record<number, DupStatus>) => void;
 }) {
   const invalidate = useInvalidateLibrary();
@@ -149,6 +153,14 @@ function GroupCard({
               <div className="p-2">
                 <p className="truncate text-xs font-medium" title={m.path}>
                   {m.current_filename}
+                  {nameMatches?.has(m.photo_id) && (
+                    <span
+                      className="ml-1 rounded bg-sky-100 px-1 py-0.5 text-[10px] font-semibold text-sky-700 dark:bg-sky-900/40 dark:text-sky-300"
+                      title="Filename matches the name pattern"
+                    >
+                      name match
+                    </span>
+                  )}
                 </p>
                 <p className="text-xs text-slate-400">
                   {formatBytes(m.file_size)}
@@ -179,6 +191,7 @@ function GroupCard({
 
 export function DuplicatesView() {
   const { data, refetch, isLoading, isFetching } = useDuplicates();
+  const { data: foldersData } = useFolders();
   const invalidate = useInvalidateLibrary();
   const { data: jobsData } = useJobsSnapshot();
   const dedupRunning = jobsData?.dedupRunning ?? false;
@@ -191,6 +204,11 @@ export function DuplicatesView() {
   const permDeleteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Live status overrides from GroupCard optimistic updates, keyed by group id.
   const [localStatuses, setLocalStatuses] = useState<Record<number, Record<number, DupStatus>>>({});
+  // Targeted-dedup filters: restrict the groups shown to one folder and/or to
+  // groups containing a user-defined "numbered copy" filename pattern.
+  const [folderFilter, setFolderFilter] = useState("");
+  const [namePattern, setNamePattern] = useState("{name}_{d}.{ext}");
+  const [nameFilterOn, setNameFilterOn] = useState(false);
 
   // Refresh groups whenever a dedup run completes.
   useEffect(() => {
@@ -198,7 +216,31 @@ export function DuplicatesView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dedupRunning]);
 
-  const groups = data?.groups ?? [];
+  const allGroups = data?.groups ?? [];
+  const folders = foldersData?.folders ?? [];
+
+  // Precompute name-pattern matches per group so both the filter and the
+  // per-member badges use the same result.
+  const nameMatchesByGroup = useMemo(() => {
+    const map = new Map<number, Set<number>>();
+    if (!nameFilterOn && !namePattern.trim()) return map;
+    for (const g of allGroups) {
+      map.set(
+        g.id,
+        findPatternMatches(
+          g.members.map((m) => ({ id: m.photo_id, filename: m.current_filename })),
+          namePattern
+        )
+      );
+    }
+    return map;
+  }, [allGroups, namePattern, nameFilterOn]);
+
+  const groups = allGroups.filter((g) => {
+    if (folderFilter && !g.members.some((m) => m.rel_dir === folderFilter)) return false;
+    if (nameFilterOn && (nameMatchesByGroup.get(g.id)?.size ?? 0) === 0) return false;
+    return true;
+  });
   const latestDedup = jobsData?.jobs.find((j) => j.type === "dedup");
 
   // Aggregate deletion stats, preferring live local state over stale server data.
@@ -239,7 +281,14 @@ export function DuplicatesView() {
     // Keep the confirmation modal open with a spinner until the delete lands.
     setDeletingMode(permanent ? "permanent" : "trash");
     try {
-      await api.applyDuplicates(undefined, permanent);
+      // Scope to the currently filtered groups so an active folder/name-pattern
+      // filter can't cause the confirm dialog to undercount what's deleted.
+      const filtered = folderFilter || nameFilterOn;
+      if (filtered) {
+        await Promise.all(groups.map((g) => api.applyDuplicates(g.id, permanent)));
+      } else {
+        await api.applyDuplicates(undefined, permanent);
+      }
       setLocalStatuses({});
       invalidate();
       refetch();
@@ -277,6 +326,59 @@ export function DuplicatesView() {
           Scan menu.
         </p>
       </div>
+
+      {/* Targeted-dedup filters — restrict which groups are shown/acted on */}
+      {allGroups.length > 0 && !isLoading && (
+        <div className="mb-4 flex flex-wrap items-end gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 sm:px-4 dark:border-slate-700 dark:bg-slate-800/50">
+          <label className="flex flex-col gap-1 text-xs font-medium text-slate-500 dark:text-slate-400">
+            <span className="inline-flex items-center gap-1">
+              <FolderIcon className="text-sm" /> Folder
+            </span>
+            <select
+              value={folderFilter}
+              onChange={(e) => setFolderFilter(e.target.value)}
+              className="rounded border border-slate-300 bg-white px-2 py-1 text-sm text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200"
+            >
+              <option value="">All folders</option>
+              {folders.map((f) => (
+                <option key={f.path} value={f.path}>
+                  {f.path}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1 text-xs font-medium text-slate-500 dark:text-slate-400">
+            <span>Name pattern</span>
+            <input
+              type="text"
+              value={namePattern}
+              onChange={(e) => setNamePattern(e.target.value)}
+              placeholder="{name}_{d}.{ext}"
+              className="w-48 rounded border border-slate-300 bg-white px-2 py-1 font-mono text-sm text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200"
+            />
+          </label>
+          <label className="flex items-center gap-1.5 pb-1.5 text-sm text-slate-600 dark:text-slate-300">
+            <input
+              type="checkbox"
+              checked={nameFilterOn}
+              onChange={(e) => setNameFilterOn(e.target.checked)}
+            />
+            Only show name-pattern matches
+          </label>
+          {(folderFilter || nameFilterOn) && (
+            <button
+              type="button"
+              onClick={() => {
+                setFolderFilter("");
+                setNameFilterOn(false);
+              }}
+              className="pb-1.5 text-sm text-brand-600 hover:underline dark:text-brand-400"
+            >
+              Clear filters
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Bulk actions — only shown when there are groups to act on */}
       {groups.length > 0 && !isLoading && (
@@ -322,7 +424,7 @@ export function DuplicatesView() {
       {!dedupRunning &&
         !isFetching &&
         latestDedup?.status === "completed" &&
-        groups.length === 0 && (
+        allGroups.length === 0 && (
           <div className="mb-4 rounded-lg bg-emerald-50 px-4 py-2.5 text-sm text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
             Scan complete — no duplicate groups found.
           </div>
@@ -337,7 +439,7 @@ export function DuplicatesView() {
             once it finishes.
           </p>
         </div>
-      ) : isLoading || ((isFetching || dedupRunning) && groups.length === 0) ? (
+      ) : isLoading || ((isFetching || dedupRunning) && allGroups.length === 0) ? (
         <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 p-10 text-center dark:border-slate-700">
           <ScanIcon className="mb-2 animate-spin text-3xl text-brand-500" />
           <p className="font-medium">
@@ -349,12 +451,20 @@ export function DuplicatesView() {
               : "Fetching duplicate groups."}
           </p>
         </div>
-      ) : groups.length === 0 ? (
+      ) : allGroups.length === 0 ? (
         <div className="rounded-xl border border-dashed border-slate-300 p-10 text-center dark:border-slate-700">
           <CopyIcon className="mx-auto mb-2 text-3xl text-slate-300" />
           <p className="font-medium">No duplicate groups</p>
           <p className="text-sm text-slate-500">
             Run a duplicate scan to find exact (hash-based) duplicate photos.
+          </p>
+        </div>
+      ) : groups.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-slate-300 p-10 text-center dark:border-slate-700">
+          <CopyIcon className="mx-auto mb-2 text-3xl text-slate-300" />
+          <p className="font-medium">No groups match your filters</p>
+          <p className="text-sm text-slate-500">
+            Try a different folder or adjust the name pattern.
           </p>
         </div>
       ) : (
@@ -363,6 +473,7 @@ export function DuplicatesView() {
             <GroupCard
               key={g.id}
               group={g}
+              nameMatches={nameMatchesByGroup.get(g.id)}
               onStatusChange={(s) =>
                 setLocalStatuses((prev) => ({ ...prev, [g.id]: s }))
               }

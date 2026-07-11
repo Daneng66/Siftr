@@ -83,6 +83,7 @@ export interface DuplicateMember {
   width: number | null;
   height: number | null;
   path: string;
+  rel_dir: string;
   mtime_ms: number;
 }
 

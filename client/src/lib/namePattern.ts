@@ -4,10 +4,16 @@
  * `sunset_1.jpg` as the same `sunset`/`jpg` identity.
  *
  * Tokens: `{name}` — base name (captured), `{d}` — a run of digits, `{ext}` —
- * file extension (captured). Everything between `{name}` and the final `.`
- * before `{ext}` (typically the `{d}` suffix and its surrounding delimiters,
- * e.g. `_` or ` (...)`) is treated as optional, so the "un-suffixed" original
- * filename matches the pattern too.
+ * file extension (captured), `*` — any run of characters (glob-style
+ * wildcard), `?` — any single character. Everything between `{name}` and the
+ * final `.` before `{ext}` (typically the `{d}`/wildcard suffix and its
+ * surrounding delimiters, e.g. `_` or ` (...)`) is treated as optional, so the
+ * "un-suffixed" original filename matches the pattern too.
+ *
+ * `*`/`?` work best anchored to a literal delimiter (e.g. `{name}_*.{ext}`).
+ * A bare `{name}*.{ext}` with no delimiter is ambiguous — like an unanchored
+ * shell glob, there's no single correct split between "name" and "suffix" —
+ * so `{name}` falls back to its default lazy (shortest-match) behavior.
  */
 export interface NamePatternMatch {
   name: string;
@@ -18,9 +24,17 @@ function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-/** Turn a literal pattern fragment (which may still contain "{d}") into regex source. */
+/** Turn a literal pattern fragment (which may still contain "{d}", "*", "?") into regex source. */
 function fragmentToRegex(s: string): string {
-  return s.split("{d}").map(escapeRegex).join("\\d+");
+  return s
+    .split(/(\{d\}|\*|\?)/)
+    .map((part) => {
+      if (part === "{d}") return "\\d+";
+      if (part === "*") return ".*";
+      if (part === "?") return ".";
+      return escapeRegex(part);
+    })
+    .join("");
 }
 
 /** Compile a user pattern into a matcher, or null if the pattern is invalid. */

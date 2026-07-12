@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Modal, Button } from "../../components/ui/Modal";
 import { api } from "../../lib/api";
-import type { OrganizePlanItem, OrganizeScope } from "../../lib/types";
+import type { OrganizeDateFallback, OrganizePlanItem, OrganizeScope } from "../../lib/types";
 import { useInvalidateLibrary } from "../../hooks/queries";
 
 const TOKENS = [
@@ -30,6 +30,7 @@ export function OrganizeModal({
   const [pattern, setPattern] = useState("{date:YYYY}/{date:MM}/{original}");
   const [customText, setCustomText] = useState("");
   const [retainStructure, setRetainStructure] = useState(true);
+  const [dateFallback, setDateFallback] = useState<OrganizeDateFallback>("unknown");
   const [plan, setPlan] = useState<OrganizePlanItem[]>([]);
   const [totalPhotos, setTotalPhotos] = useState(0);
   const [moving, setMoving] = useState(0);
@@ -43,7 +44,10 @@ export function OrganizeModal({
     if (!open) return;
     const t = setTimeout(async () => {
       try {
-        const res = await api.organizePreview(scope, pattern, customText, retainStructure);
+        const res = await api.organizePreview(scope, pattern, customText, {
+          retainStructure,
+          dateFallback,
+        });
         setPlan(res.plan);
         setTotalPhotos(res.totalPhotos);
         setMoving(res.moving);
@@ -54,13 +58,13 @@ export function OrganizeModal({
       }
     }, 250);
     return () => clearTimeout(t);
-  }, [open, scope, pattern, customText, retainStructure]);
+  }, [open, scope, pattern, customText, retainStructure, dateFallback]);
 
   const apply = async () => {
     setBusy(true);
     setError(null);
     try {
-      await api.organizeApply(scope, pattern, customText, retainStructure);
+      await api.organizeApply(scope, pattern, customText, { retainStructure, dateFallback });
       invalidate();
       onClose();
     } catch (e) {
@@ -129,6 +133,22 @@ export function OrganizeModal({
               onChange={(e) => setCustomText(e.target.value)}
               className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-brand-400 dark:border-slate-700 dark:bg-slate-800"
             />
+          </div>
+        )}
+
+        {pattern.includes("{date") && (
+          <div>
+            <label className="mb-1 block text-sm font-medium">
+              If a photo has no EXIF date
+            </label>
+            <select
+              value={dateFallback}
+              onChange={(e) => setDateFallback(e.target.value as OrganizeDateFallback)}
+              className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-brand-400 dark:border-slate-700 dark:bg-slate-800"
+            >
+              <option value="unknown">Group together under "unknown-date"</option>
+              <option value="fileModified">Use the file's modified date instead</option>
+            </select>
           </div>
         )}
 

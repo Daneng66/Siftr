@@ -26,6 +26,10 @@ const bodySchema = z.object({
   // rel_dir as a prefix and reorganize within it, rather than rebuilding the
   // whole tree from the library root.
   retainStructure: z.boolean().default(true),
+  // What {date:...} tokens resolve to when a photo has no EXIF date taken:
+  //   "unknown"      - leave it null; formatDate() renders "unknown-date".
+  //   "fileModified" - fall back to the file's on-disk modified time.
+  dateFallback: z.enum(["unknown", "fileModified"]).default("unknown"),
 });
 
 interface PlanItem {
@@ -83,7 +87,8 @@ function buildOrganizePlan(
   pattern: string,
   customText: string,
   scope: Scope,
-  retainStructure: boolean
+  retainStructure: boolean,
+  dateFallback: "unknown" | "fileModified"
 ): PlanItem[] {
   const buckets = new Map<string, PhotoRow[]>();
   for (const photo of photos) {
@@ -104,7 +109,9 @@ function buildOrganizePlan(
           path.extname(photo.original_filename)
         ),
         currentName: path.basename(photo.current_filename, ext),
-        dateTaken: photo.exif_date_taken,
+        dateTaken:
+          photo.exif_date_taken ??
+          (dateFallback === "fileModified" ? photo.date_modified : null),
         cameraModel: photo.exif_camera_model,
         index,
         customText,
@@ -173,7 +180,8 @@ organizeRouter.post("/preview", (req, res) => {
     body.pattern,
     body.customText,
     body.scope,
-    body.retainStructure
+    body.retainStructure,
+    body.dateFallback
   );
   const plan = items.map(toPublicItem);
   res.json({
@@ -193,7 +201,8 @@ organizeRouter.post("/apply", async (req, res) => {
     body.pattern,
     body.customText,
     body.scope,
-    body.retainStructure
+    body.retainStructure,
+    body.dateFallback
   );
   if (items.some((i) => i.conflict)) {
     return res

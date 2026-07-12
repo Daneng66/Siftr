@@ -3,6 +3,7 @@ import type {
   DupStatus,
   Folder,
   JobsResponse,
+  OrganizeOptions,
   OrganizePlanItem,
   OrganizeScope,
   PhotoDetail,
@@ -112,7 +113,7 @@ export const api = {
     scope: OrganizeScope,
     pattern: string,
     customText: string,
-    retainStructure: boolean
+    options: OrganizeOptions
   ) =>
     request<{
       plan: OrganizePlanItem[];
@@ -121,17 +122,17 @@ export const api = {
       moving: number;
     }>("/api/organize/preview", {
       method: "POST",
-      body: JSON.stringify({ scope, pattern, customText, retainStructure }),
+      body: JSON.stringify({ scope, pattern, customText, ...options }),
     }),
   organizeApply: (
     scope: OrganizeScope,
     pattern: string,
     customText: string,
-    retainStructure: boolean
+    options: OrganizeOptions
   ) =>
     request<{ moved: number; plan: OrganizePlanItem[] }>("/api/organize/apply", {
       method: "POST",
-      body: JSON.stringify({ scope, pattern, customText, retainStructure }),
+      body: JSON.stringify({ scope, pattern, customText, ...options }),
     }),
 
   renamePhoto: (id: number, filename: string) =>

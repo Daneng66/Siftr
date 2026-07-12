@@ -23,17 +23,19 @@ statsRouter.get("/", (_req, res) => {
       .prepare(`SELECT COUNT(DISTINCT rel_dir) AS n FROM photos WHERE rel_dir <> ''`)
       .get() as { n: number }
   ).n;
+  // "count" here is the number of duplicate GROUPS (not the number of photos
+  // across them) — kept consistent with how every other duplicates count in
+  // the UI is defined (e.g. the Duplicates view's "N groups").
   const dup = db
     .prepare(
       `WITH g AS (
-         SELECT COUNT(*) AS cnt,
-                SUM(p.file_size) AS total,
+         SELECT SUM(p.file_size) AS total,
                 MAX(p.file_size) AS keep
          FROM duplicate_group_members m
          JOIN photos p ON p.id = m.photo_id
          GROUP BY m.group_id
        )
-       SELECT COALESCE(SUM(cnt - 1), 0) AS count,
+       SELECT COUNT(*) AS count,
               COALESCE(SUM(total - keep), 0) AS size
        FROM g`
     )

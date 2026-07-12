@@ -2,24 +2,27 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../lib/api";
 import {
   useDuplicates,
-  useFolders,
   useInvalidateLibrary,
   useJobsSnapshot,
 } from "../../hooks/queries";
+import { useUi } from "../../store/ui";
 import { Button, Modal } from "../../components/ui/Modal";
 import { formatBytes } from "../../lib/format";
-import { CheckIcon, CopyIcon, FolderIcon, ScanIcon, SpinnerIcon, StarIcon, TrashIcon } from "../../components/ui/icons";
+import { CheckIcon, CopyIcon, ScanIcon, SpinnerIcon, StarIcon, TrashIcon, XIcon } from "../../components/ui/icons";
 import type { DuplicateGroup, DupStatus } from "../../lib/types";
 import { findPatternMatches } from "../../lib/namePattern";
+import { parseExtensionPriority, pickPreferredByExtension } from "../../lib/extensionPriority";
 import { clsx } from "clsx";
 
 function GroupCard({
   group,
   nameMatches,
+  extRecommendedId,
   onStatusChange,
 }: {
   group: DuplicateGroup;
   nameMatches?: Set<number>;
+  extRecommendedId?: number | null;
   onStatusChange?: (status: Record<number, DupStatus>) => void;
 }) {
   const invalidate = useInvalidateLibrary();
@@ -67,6 +70,16 @@ function GroupCard({
     (s) => s === "marked_for_deletion"
   ).length;
 
+  // Which member currently holds the default "recommended" slot, if any (once a
+  // group is resolved via keepOnly/ignoreAll, no member has this status anymore).
+  const liveRecommendedId = group.members.find(
+    (m) => status[m.photo_id] === "recommended"
+  )?.photo_id;
+  // Extension priority can redirect the recommendation to a different member,
+  // but only while the group is still in its untouched default state.
+  const effectiveRecommendedId =
+    liveRecommendedId !== undefined ? extRecommendedId ?? liveRecommendedId : undefined;
+
   const applyGroup = async () => {
     setBusy(true);
     try {
@@ -111,15 +124,20 @@ function GroupCard({
       <div className="flex flex-wrap gap-3">
         {group.members.map((m) => {
           const st = status[m.photo_id];
+          const recommended =
+            effectiveRecommendedId !== undefined &&
+            m.photo_id === effectiveRecommendedId &&
+            st !== "kept" &&
+            st !== "marked_for_deletion";
           return (
             <div
               key={m.photo_id}
               className={clsx(
                 "w-full overflow-hidden rounded-lg border-2 transition-colors sm:w-48",
                 st === "kept" && "border-emerald-500",
-                st === "recommended" && "border-amber-500",
+                recommended && "border-amber-500",
                 st === "marked_for_deletion" && "border-red-500 opacity-70",
-                st === "ignored" && "border-transparent"
+                !recommended && st !== "kept" && st !== "marked_for_deletion" && "border-transparent"
               )}
             >
               <div className="relative aspect-square bg-slate-100 dark:bg-slate-800">
@@ -134,7 +152,7 @@ function GroupCard({
                     <CheckIcon /> Keep
                   </span>
                 )}
-                {st === "recommended" && (
+                {recommended && (
                   <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded bg-amber-500 px-1.5 py-0.5 text-xs font-semibold text-white">
                     <StarIcon /> Recommended
                   </span>
@@ -191,7 +209,7 @@ function GroupCard({
 
 export function DuplicatesView() {
   const { data, refetch, isLoading, isFetching } = useDuplicates();
-  const { data: foldersData } = useFolders();
+  const { filter, setFilter } = useUi();
   const invalidate = useInvalidateLibrary();
   const { data: jobsData } = useJobsSnapshot();
   const dedupRunning = jobsData?.dedupRunning ?? false;
@@ -204,11 +222,12 @@ export function DuplicatesView() {
   const permDeleteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Live status overrides from GroupCard optimistic updates, keyed by group id.
   const [localStatuses, setLocalStatuses] = useState<Record<number, Record<number, DupStatus>>>({});
-  // Targeted-dedup filters: restrict the groups shown to one folder and/or to
-  // groups containing a user-defined "numbered copy" filename pattern.
-  const [folderFilter, setFolderFilter] = useState("");
+  // Targeted-dedup filters: restrict/steer the groups shown. The folder filter
+  // is the same sidebar folder-tree selection the Library view uses (shared
+  // global state), so clicking a folder there also scopes this view.
   const [namePattern, setNamePattern] = useState("{name}_{d}.{ext}");
   const [nameFilterOn, setNameFilterOn] = useState(false);
+  const [extPriorityInput, setExtPriorityInput] = useState("");
 
   // Refresh groups whenever a dedup run completes.
   useEffect(() => {
@@ -217,7 +236,8 @@ export function DuplicatesView() {
   }, [dedupRunning]);
 
   const allGroups = data?.groups ?? [];
-  const folders = foldersData?.folders ?? [];
+  const activeFolder = filter.kind === "folder" ? filter : null;
+  const extPriorityList = useMemo(() => parseExtensionPriority(extPriorityInput), [extPriorityInput]);
 
   // Precompute name-pattern matches per group so both the filter and the
   // per-member badges use the same result.
@@ -236,8 +256,25 @@ export function DuplicatesView() {
     return map;
   }, [allGroups, namePattern, nameFilterOn]);
 
+  // Precompute the extension-priority pick per group so both "Keep all
+  // recommended" and the per-member "Recommended" badge use the same result.
+  const extRecommendedByGroup = useMemo(() => {
+    const map = new Map<number, number | null>();
+    if (extPriorityList.length === 0) return map;
+    for (const g of allGroups) {
+      map.set(
+        g.id,
+        pickPreferredByExtension(
+          g.members.map((m) => ({ id: m.photo_id, filename: m.current_filename })),
+          extPriorityList
+        )
+      );
+    }
+    return map;
+  }, [allGroups, extPriorityList]);
+
   const groups = allGroups.filter((g) => {
-    if (folderFilter && !g.members.some((m) => m.rel_dir === folderFilter)) return false;
+    if (activeFolder && !g.members.some((m) => m.rel_dir === activeFolder.path)) return false;
     if (nameFilterOn && (nameMatchesByGroup.get(g.id)?.size ?? 0) === 0) return false;
     return true;
   });
@@ -258,9 +295,14 @@ export function DuplicatesView() {
     try {
       await Promise.all(
         groups.map((group) => {
-          // Promote the recommended member to kept; mark the rest for deletion.
+          // Extension priority (if set) wins over the server's largest-file
+          // pick; promote the winner to kept, mark the rest for deletion.
+          const extPick = extRecommendedByGroup.get(group.id);
           const recommended = group.members.find((m) => m.status === "recommended");
-          const best = recommended ?? [...group.members].sort((a, b) => b.file_size - a.file_size)[0];
+          const best =
+            (extPick != null ? group.members.find((m) => m.photo_id === extPick) : undefined) ??
+            recommended ??
+            [...group.members].sort((a, b) => b.file_size - a.file_size)[0];
           return api.resolveGroup(
             group.id,
             group.members.map((m) => ({
@@ -283,7 +325,7 @@ export function DuplicatesView() {
     try {
       // Scope to the currently filtered groups so an active folder/name-pattern
       // filter can't cause the confirm dialog to undercount what's deleted.
-      const filtered = folderFilter || nameFilterOn;
+      const filtered = !!activeFolder || nameFilterOn;
       if (filtered) {
         await Promise.all(groups.map((g) => api.applyDuplicates(g.id, permanent)));
       } else {
@@ -327,26 +369,24 @@ export function DuplicatesView() {
         </p>
       </div>
 
-      {/* Targeted-dedup filters — restrict which groups are shown/acted on */}
+      {/* Targeted-dedup filters — restrict/steer which groups are shown/acted on.
+          Folder scoping comes from the sidebar's folder tree (shared global
+          filter state), so browse there rather than a separate picker here. */}
       {allGroups.length > 0 && !isLoading && (
         <div className="mb-4 flex flex-wrap items-end gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 sm:px-4 dark:border-slate-700 dark:bg-slate-800/50">
-          <label className="flex flex-col gap-1 text-xs font-medium text-slate-500 dark:text-slate-400">
-            <span className="inline-flex items-center gap-1">
-              <FolderIcon className="text-sm" /> Folder
+          {activeFolder && (
+            <span className="mb-1.5 inline-flex items-center gap-1.5 rounded-full bg-brand-100 px-2.5 py-1 text-xs font-medium text-brand-700 dark:bg-brand-900/40 dark:text-brand-200">
+              Folder: {activeFolder.name}
+              <button
+                type="button"
+                onClick={() => setFilter({ kind: "all" })}
+                aria-label="Clear folder filter"
+                className="rounded hover:opacity-70"
+              >
+                <XIcon className="text-xs" />
+              </button>
             </span>
-            <select
-              value={folderFilter}
-              onChange={(e) => setFolderFilter(e.target.value)}
-              className="rounded border border-slate-300 bg-white px-2 py-1 text-sm text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200"
-            >
-              <option value="">All folders</option>
-              {folders.map((f) => (
-                <option key={f.path} value={f.path}>
-                  {f.path}
-                </option>
-              ))}
-            </select>
-          </label>
+          )}
           <label className="flex flex-col gap-1 text-xs font-medium text-slate-500 dark:text-slate-400">
             <span>Name pattern</span>
             <input
@@ -369,12 +409,24 @@ export function DuplicatesView() {
             />
             Only show name-pattern matches
           </label>
-          {(folderFilter || nameFilterOn) && (
+          <label className="flex flex-col gap-1 text-xs font-medium text-slate-500 dark:text-slate-400">
+            <span>Extension priority</span>
+            <input
+              type="text"
+              value={extPriorityInput}
+              onChange={(e) => setExtPriorityInput(e.target.value)}
+              placeholder="heic, raw, jpg"
+              title="Comma-separated extensions, highest priority first. The best-ranked copy in each group is recommended to keep, overriding the largest-file default."
+              className="w-40 rounded border border-slate-300 bg-white px-2 py-1 font-mono text-sm text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200"
+            />
+          </label>
+          {(activeFolder || nameFilterOn || extPriorityInput.trim()) && (
             <button
               type="button"
               onClick={() => {
-                setFolderFilter("");
+                if (activeFolder) setFilter({ kind: "all" });
                 setNameFilterOn(false);
+                setExtPriorityInput("");
               }}
               className="pb-1.5 text-sm text-brand-600 hover:underline dark:text-brand-400"
             >
@@ -468,7 +520,7 @@ export function DuplicatesView() {
           <CopyIcon className="mx-auto mb-2 text-3xl text-slate-300" />
           <p className="font-medium">No groups match your filters</p>
           <p className="text-sm text-slate-500">
-            Try a different folder or adjust the name pattern.
+            Try a different folder (via the sidebar) or adjust the name pattern.
           </p>
         </div>
       ) : (
@@ -478,6 +530,7 @@ export function DuplicatesView() {
               key={g.id}
               group={g}
               nameMatches={nameMatchesByGroup.get(g.id)}
+              extRecommendedId={extRecommendedByGroup.get(g.id)}
               onStatusChange={(s) =>
                 setLocalStatuses((prev) => ({ ...prev, [g.id]: s }))
               }

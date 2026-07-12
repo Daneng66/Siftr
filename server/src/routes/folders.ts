@@ -38,13 +38,23 @@ foldersRouter.get("/", (_req, res) => {
     }
   }
 
+  // Recursive count: a folder's total includes photos in every descendant folder.
+  const recursiveCounts = new Map<string, number>();
+  for (const dir of all) {
+    let total = 0;
+    for (const [otherDir, n] of directCounts) {
+      if (otherDir === dir || otherDir.startsWith(`${dir}/`)) total += n;
+    }
+    recursiveCounts.set(dir, total);
+  }
+
   const folders: FolderEntry[] = [...all].map((p) => {
     const slash = p.lastIndexOf("/");
     return {
       path: p,
       name: slash >= 0 ? p.slice(slash + 1) : p,
       parent_path: slash >= 0 ? p.slice(0, slash) : null,
-      photo_count: directCounts.get(p) ?? 0,
+      photo_count: recursiveCounts.get(p) ?? 0,
     };
   });
   folders.sort((a, b) => a.path.localeCompare(b.path, undefined, { numeric: true }));

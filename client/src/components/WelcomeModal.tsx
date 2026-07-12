@@ -5,6 +5,7 @@ import {
   CopyIcon,
   PencilIcon,
   TrashIcon,
+  FolderTreeIcon,
 } from "./ui/icons";
 
 const STORAGE_KEY = "siftr-welcome-seen";
@@ -80,12 +81,19 @@ export function WelcomeModal() {
 
       <ul className="mt-4 space-y-3">
         <Feature icon={<ImagesIcon />} title="Browse your library">
-          Scan a folder of photos and explore them by folder, with thumbnails
-          and EXIF details.
+          Scan a folder of photos and explore a collapsible folder tree, with
+          thumbnails, live counts, and EXIF details.
         </Feature>
         <Feature icon={<CopyIcon />} title="Find &amp; remove duplicates">
           Detect exact (and optionally near-) duplicate images and clear out the
           redundant copies, keeping the best of each set.
+        </Feature>
+        <Feature icon={<FolderTreeIcon />} title="Organize your library">
+          Auto-sort photos into folders with a pattern like{" "}
+          <code className="rounded bg-slate-100 px-1 py-0.5 text-xs dark:bg-slate-800">
+            {"{date:YYYY}/{date:MM}"}
+          </code>
+          , previewed before anything moves.
         </Feature>
         <Feature icon={<PencilIcon />} title="Rename &amp; edit metadata">
           Bulk-rename files with patterns and edit EXIF metadata in place.

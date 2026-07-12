@@ -226,6 +226,11 @@ export function OrganizeModal({
                     ) : (
                       <span className="text-emerald-600 dark:text-emerald-400">
                         {item.newRelPath}
+                        {item.disambiguated && (
+                          <span className="ml-1.5 rounded bg-amber-100 px-1.5 py-0.5 font-sans text-[10px] font-medium text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+                            renamed to avoid a clash
+                          </span>
+                        )}
                       </span>
                     )}
                   </td>

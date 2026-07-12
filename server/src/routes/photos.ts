@@ -46,8 +46,14 @@ photosRouter.get("/", (req, res) => {
   const params: Record<string, unknown> = {};
 
   if (q.folder !== undefined) {
-    where.push("p.rel_dir = @folder");
+    // Include photos in the folder itself and in any subfolder beneath it.
+    // Escape LIKE wildcards that may appear in real folder names.
+    const escaped = q.folder.replace(/[\\%_]/g, "\\$&");
+    where.push(
+      "(p.rel_dir = @folder OR p.rel_dir LIKE @folderPrefix ESCAPE '\\')"
+    );
     params.folder = q.folder;
+    params.folderPrefix = `${escaped}/%`;
   }
   if (q.duplicatesOnly) {
     where.push(

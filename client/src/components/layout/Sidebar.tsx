@@ -1,9 +1,19 @@
-import { useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useFolders, useHardScanRunning, useStats } from "../../hooks/queries";
 import { useUi } from "../../store/ui";
 import { formatBytes } from "../../lib/format";
 import type { FilterState, Folder } from "../../lib/types";
-import { FolderIcon, ImagesIcon, CopyIcon, ChatIcon, MoonIcon, SunIcon, XIcon } from "../ui/icons";
+import {
+  FolderIcon,
+  ImagesIcon,
+  CopyIcon,
+  ChatIcon,
+  MoonIcon,
+  SunIcon,
+  XIcon,
+  ChevronRightIcon,
+  ChevronDownIcon,
+} from "../ui/icons";
 import { clsx } from "clsx";
 
 function StatRow({ label, value }: { label: string; value: string | number }) {
@@ -69,36 +79,76 @@ function buildTree(folders: Folder[]): FolderNode[] {
   return roots;
 }
 
-function FolderTree({ nodes, depth = 0 }: { nodes: FolderNode[]; depth?: number }) {
+function FolderTree({
+  nodes,
+  depth = 0,
+  collapsed,
+  toggleCollapsed,
+}: {
+  nodes: FolderNode[];
+  depth?: number;
+  collapsed: Set<string>;
+  toggleCollapsed: (path: string) => void;
+}) {
   const { filter, setFilter, setSidebarOpen } = useUi();
   return (
     <>
-      {nodes.map((node) => (
-        <div key={node.path}>
-          <button
-            onClick={() => {
-              setFilter({ kind: "folder", path: node.path, name: node.name });
-              setSidebarOpen(false);
-            }}
-            style={{ paddingLeft: `${0.625 + depth * 0.85}rem` }}
-            className={clsx(
-              "flex w-full items-center gap-2 rounded-lg py-1.5 pr-2.5 text-sm transition-colors",
-              filter.kind === "folder" && filter.path === node.path
-                ? "bg-brand-50 font-medium text-brand-700 dark:bg-brand-900/40 dark:text-brand-200"
-                : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+      {nodes.map((node) => {
+        const hasChildren = node.children.length > 0;
+        const isCollapsed = collapsed.has(node.path);
+        return (
+          <div key={node.path}>
+            <div
+              style={{ paddingLeft: `${0.125 + depth * 0.85}rem` }}
+              className={clsx(
+                "flex w-full items-center gap-1 rounded-lg py-1.5 pr-2.5 text-sm transition-colors",
+                filter.kind === "folder" && filter.path === node.path
+                  ? "bg-brand-50 font-medium text-brand-700 dark:bg-brand-900/40 dark:text-brand-200"
+                  : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+              )}
+            >
+              <button
+                onClick={() => hasChildren && toggleCollapsed(node.path)}
+                aria-label={isCollapsed ? "Expand folder" : "Collapse folder"}
+                aria-expanded={hasChildren ? !isCollapsed : undefined}
+                tabIndex={hasChildren ? 0 : -1}
+                className={clsx(
+                  "flex h-5 w-5 shrink-0 items-center justify-center rounded text-slate-400 hover:text-slate-600 dark:hover:text-slate-200",
+                  !hasChildren && "invisible"
+                )}
+              >
+                {hasChildren &&
+                  (isCollapsed ? (
+                    <ChevronRightIcon className="text-sm" />
+                  ) : (
+                    <ChevronDownIcon className="text-sm" />
+                  ))}
+              </button>
+              <button
+                onClick={() => {
+                  setFilter({ kind: "folder", path: node.path, name: node.name });
+                  setSidebarOpen(false);
+                }}
+                className="flex flex-1 items-center gap-2 text-left"
+              >
+                <FolderIcon className="text-base text-amber-500" />
+                <span className="flex-1 truncate text-left">{node.name}</span>
+                <span className="text-xs text-slate-400 tabular-nums">
+                  {node.photo_count}
+                </span>
+              </button>
+            </div>
+            {hasChildren && !isCollapsed && (
+              <FolderTree
+                nodes={node.children}
+                depth={depth + 1}
+                collapsed={collapsed}
+                toggleCollapsed={toggleCollapsed}
+              />
             )}
-          >
-            <FolderIcon className="text-base text-amber-500" />
-            <span className="flex-1 truncate text-left">{node.name}</span>
-            <span className="text-xs text-slate-400 tabular-nums">
-              {node.photo_count}
-            </span>
-          </button>
-          {node.children.length > 0 && (
-            <FolderTree nodes={node.children} depth={depth + 1} />
-          )}
-        </div>
-      ))}
+          </div>
+        );
+      })}
     </>
   );
 }
@@ -118,6 +168,16 @@ export function Sidebar() {
     () => buildTree(foldersData?.folders ?? []),
     [foldersData]
   );
+
+  const [collapsedPaths, setCollapsedPaths] = useState<Set<string>>(new Set());
+  const toggleCollapsed = useCallback((path: string) => {
+    setCollapsedPaths((prev) => {
+      const next = new Set(prev);
+      if (next.has(path)) next.delete(path);
+      else next.add(path);
+      return next;
+    });
+  }, []);
 
   const select = (f: FilterState) => {
     setFilter(f);
@@ -201,7 +261,11 @@ export function Sidebar() {
           </p>
         ) : (
           <div className="space-y-0.5">
-            <FolderTree nodes={tree} />
+            <FolderTree
+              nodes={tree}
+              collapsed={collapsedPaths}
+              toggleCollapsed={toggleCollapsed}
+            />
           </div>
         )}
       </section>

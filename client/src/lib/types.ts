@@ -30,6 +30,7 @@ export interface Folder {
   path: string;
   name: string;
   parent_path: string | null;
+  /** Photos in this folder plus every subfolder beneath it. */
   photo_count: number;
 }
 

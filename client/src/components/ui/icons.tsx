@@ -93,6 +93,12 @@ export const XIcon = (p: IconProps) => (
     <path d="M18 6 6 18M6 6l12 12" />
   </Svg>
 );
+export const InfoIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 11v5.5M12 8v.01" />
+  </Svg>
+);
 export const ChevronRightIcon = (p: IconProps) => (
   <Svg {...p}>
     <path d="m9 18 6-6-6-6" />

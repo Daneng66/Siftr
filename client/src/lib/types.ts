@@ -37,9 +37,9 @@ export interface Stats {
   photos: number;
   totalSize: number;
   folders: number;
-  /** Number of redundant duplicate copies (excludes the one kept per group). */
+  /** Number of duplicate groups (not the number of photos across them). */
   duplicateCount: number;
-  /** Bytes reclaimable by removing those redundant copies. */
+  /** Bytes reclaimable by removing the redundant copies in those groups. */
   reclaimableSize: number;
 }
 

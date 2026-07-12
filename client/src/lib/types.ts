@@ -104,6 +104,14 @@ export interface RenamePlanItem {
 /** Which photos an organize run applies to — mirrors the sidebar folder filter. */
 export type OrganizeScope = { kind: "all" } | { kind: "folder"; path: string };
 
+/** What {date:...} tokens resolve to when a photo has no EXIF date taken. */
+export type OrganizeDateFallback = "unknown" | "fileModified";
+
+export interface OrganizeOptions {
+  retainStructure: boolean;
+  dateFallback: OrganizeDateFallback;
+}
+
 export interface OrganizePlanItem {
   photoId: number;
   currentRelPath: string;

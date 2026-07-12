@@ -8,7 +8,7 @@ import {
 import { useUi } from "../../store/ui";
 import { Button, Modal } from "../../components/ui/Modal";
 import { formatBytes } from "../../lib/format";
-import { CheckIcon, CopyIcon, ScanIcon, SpinnerIcon, StarIcon, TrashIcon, XIcon } from "../../components/ui/icons";
+import { CheckIcon, CopyIcon, InfoIcon, ScanIcon, SpinnerIcon, StarIcon, TrashIcon, XIcon } from "../../components/ui/icons";
 import type { DuplicateGroup, DupStatus } from "../../lib/types";
 import { findPatternMatches } from "../../lib/namePattern";
 import { parseExtensionPriority, pickPreferredByExtension } from "../../lib/extensionPriority";
@@ -228,6 +228,7 @@ export function DuplicatesView() {
   const [namePattern, setNamePattern] = useState("{name}_{d}.{ext}");
   const [nameFilterOn, setNameFilterOn] = useState(false);
   const [extPriorityInput, setExtPriorityInput] = useState("");
+  const [showFilterInfo, setShowFilterInfo] = useState(false);
 
   // Refresh groups whenever a dedup run completes.
   useEffect(() => {
@@ -379,6 +380,15 @@ export function DuplicatesView() {
           filter state), so browse there rather than a separate picker here. */}
       {allGroups.length > 0 && !isLoading && (
         <div className="mb-4 flex flex-wrap items-end gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 sm:px-4 dark:border-slate-700 dark:bg-slate-800/50">
+          <button
+            type="button"
+            onClick={() => setShowFilterInfo(true)}
+            aria-label="How filters work"
+            title="How filters work"
+            className="mb-1.5 rounded-full p-1 text-slate-400 hover:bg-slate-200 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-200"
+          >
+            <InfoIcon className="text-base" />
+          </button>
           {activeFolder && (
             <span className="mb-1.5 inline-flex items-center gap-1.5 rounded-full bg-brand-100 px-2.5 py-1 text-xs font-medium text-brand-700 dark:bg-brand-900/40 dark:text-brand-200">
               Folder: {activeFolder.name}
@@ -425,6 +435,11 @@ export function DuplicatesView() {
               className="w-40 rounded border border-slate-300 bg-white px-2 py-1 font-mono text-sm text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200"
             />
           </label>
+          <span className="ml-auto pb-1.5 text-sm text-slate-500 dark:text-slate-400">
+            {activeFolder || nameFilterOn
+              ? `Showing ${groups.length} of ${allGroups.length} group${allGroups.length === 1 ? "" : "s"}`
+              : `${allGroups.length} group${allGroups.length === 1 ? "" : "s"}`}
+          </span>
           {(activeFolder || nameFilterOn || extPriorityInput.trim()) && (
             <button
               type="button"
@@ -618,6 +633,86 @@ export function DuplicatesView() {
               </span>
             </div>
           ))}
+        </div>
+      </Modal>
+
+      {/* Filter logic explainer */}
+      <Modal
+        open={showFilterInfo}
+        onClose={() => setShowFilterInfo(false)}
+        title="How the duplicate filters work"
+      >
+        <div className="space-y-4 text-sm text-slate-600 dark:text-slate-300">
+          <div>
+            <h3 className="mb-1 font-semibold text-slate-800 dark:text-slate-100">Folder</h3>
+            <p>
+              Click a folder in the sidebar's folder tree to scope this page to
+              groups containing a photo in that folder. It's the same folder
+              selection the Library view uses, so it stays applied if you
+              switch views. Clear it with the × on the "Folder" pill above, or
+              click "All photos" in the sidebar.
+            </p>
+          </div>
+          <div>
+            <h3 className="mb-1 font-semibold text-slate-800 dark:text-slate-100">Name pattern</h3>
+            <p className="mb-1.5">
+              Flags groups whose filenames look like "numbered copies" of each
+              other, e.g. <code className="rounded bg-slate-100 px-1 dark:bg-slate-800">sunset.jpg</code> and{" "}
+              <code className="rounded bg-slate-100 px-1 dark:bg-slate-800">sunset_1.jpg</code>. Build a
+              pattern from these tokens:
+            </p>
+            <ul className="list-disc space-y-0.5 pl-5">
+              <li>
+                <code className="rounded bg-slate-100 px-1 dark:bg-slate-800">{"{name}"}</code> — base
+                filename (required)
+              </li>
+              <li>
+                <code className="rounded bg-slate-100 px-1 dark:bg-slate-800">{"{ext}"}</code> —
+                extension (required)
+              </li>
+              <li>
+                <code className="rounded bg-slate-100 px-1 dark:bg-slate-800">{"{d}"}</code> — a run of
+                digits
+              </li>
+              <li>
+                <code className="rounded bg-slate-100 px-1 dark:bg-slate-800">*</code> — any run of
+                characters
+              </li>
+              <li>
+                <code className="rounded bg-slate-100 px-1 dark:bg-slate-800">?</code> — a single
+                character
+              </li>
+            </ul>
+            <p className="mt-1.5">
+              Everything between <code className="rounded bg-slate-100 px-1 dark:bg-slate-800">{"{name}"}</code> and
+              the extension is optional, so the pattern matches both the
+              original file and its suffixed copy. Matching photos get a
+              "name match" badge; check "Only show name-pattern matches" to
+              hide every group that doesn't have one.
+            </p>
+          </div>
+          <div>
+            <h3 className="mb-1 font-semibold text-slate-800 dark:text-slate-100">Extension priority</h3>
+            <p>
+              A comma-separated list of extensions, highest priority first
+              (e.g. <code className="rounded bg-slate-100 px-1 dark:bg-slate-800">heic, raw, jpg</code>).
+              Within each group, the copy whose extension ranks best becomes
+              the "Recommended" one to keep — but only among copies tied for
+              that group's highest resolution, so a lower-resolution file can
+              never be promoted just because its extension is listed first.
+              This affects both the "Recommended" badge and "Keep all
+              recommended".
+            </p>
+          </div>
+          <div>
+            <h3 className="mb-1 font-semibold text-slate-800 dark:text-slate-100">Group count</h3>
+            <p>
+              The count in the filter bar shows how many groups are visible
+              out of the total found by the last scan. It only changes with
+              the folder and name-pattern filters — extension priority never
+              hides groups, it only affects which copy is recommended.
+            </p>
+          </div>
         </div>
       </Modal>
     </div>

@@ -3,12 +3,16 @@
  *   {original}      original filename (without extension)
  *   {name}          current filename (without extension)
  *   {date}          date taken, default format YYYYMMDD
- *   {date:FORMAT}   date taken with custom format (YYYY MM DD HH mm ss)
+ *   {date:FORMAT}   date taken with custom format (YYYY MM MMM MMMM DD HH mm ss)
  *   {seq}           sequence number (1-based)
  *   {seq:N}         sequence number zero-padded to N digits
  *   {camera}        camera model
  *   {custom}        user-provided custom text
  * The original file extension is preserved automatically.
+ *
+ * Patterns containing `/` are also used as folder-structure templates (see
+ * ../organize/pathPattern.ts) — each token is resolved the same way, one path
+ * segment at a time.
  */
 export interface RenameContext {
   originalName: string; // without extension
@@ -18,6 +22,12 @@ export interface RenameContext {
   index: number; // 0-based position within the selection
   customText: string;
 }
+
+const MONTHS_LONG = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+const MONTHS_SHORT = MONTHS_LONG.map((m) => m.slice(0, 3));
 
 function pad(n: number, width: number): string {
   return String(n).padStart(width, "0");
@@ -29,13 +39,16 @@ function formatDate(iso: string | null, format: string): string {
   if (isNaN(d.getTime())) return "unknown-date";
   const map: Record<string, string> = {
     YYYY: String(d.getFullYear()),
+    MMMM: MONTHS_LONG[d.getMonth()],
+    MMM: MONTHS_SHORT[d.getMonth()],
     MM: pad(d.getMonth() + 1, 2),
     DD: pad(d.getDate(), 2),
     HH: pad(d.getHours(), 2),
     mm: pad(d.getMinutes(), 2),
     ss: pad(d.getSeconds(), 2),
   };
-  return format.replace(/YYYY|MM|DD|HH|mm|ss/g, (m) => map[m] ?? m);
+  // Longest tokens first so `MMMM`/`MMM` aren't swallowed by the `MM` match.
+  return format.replace(/MMMM|MMM|YYYY|MM|DD|HH|mm|ss/g, (m) => map[m] ?? m);
 }
 
 /** Strip characters that are illegal in filenames on common filesystems. */

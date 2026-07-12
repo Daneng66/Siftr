@@ -18,6 +18,12 @@ container** — React frontend, Node/Express API, SQLite index, and the
   for now.)
 - **Bulk rename** — pattern tokens (`{date:…}`, `{seq:N}`, `{original}`,
   `{camera}`, `{custom}`) with a live preview and collision detection.
+- **Organize** — Nextcloud-style folder/filename templates
+  (`{date:YYYY}/{date:MM}/{original}`) that restructure photos on disk from
+  metadata. Scoped to whatever's selected in the sidebar: pick a folder to
+  reorganize just that subtree, or run it over the whole library with the
+  choice to keep every existing folder intact (reorganizing inside each one)
+  or rebuild the tree from the library root.
 - **Metadata editing** — view and edit EXIF (date, GPS, camera) individually or
   across a selection; changes are written back into the files with `exiftool`.
 - **Folders** — the sidebar mirrors the actual directory structure of your

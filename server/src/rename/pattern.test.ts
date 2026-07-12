@@ -25,6 +25,12 @@ describe("applyPattern", () => {
     expect(applyPattern("{date:YYYY-MM-DD}", base)).toBe(`${y}-${m}-${day}`);
   });
 
+  it("formats month names without the day-of-month token swallowing them", () => {
+    expect(applyPattern("{date:MMMM}", base)).toBe("July");
+    expect(applyPattern("{date:MMM}", base)).toBe("Jul");
+    expect(applyPattern("{date:YYYY-MMMM}", base)).toBe("2023-July");
+  });
+
   it("handles missing dates gracefully", () => {
     expect(applyPattern("{date}", { ...base, dateTaken: null })).toBe(
       "unknown-date"

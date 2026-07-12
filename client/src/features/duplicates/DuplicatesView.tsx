@@ -265,7 +265,12 @@ export function DuplicatesView() {
       map.set(
         g.id,
         pickPreferredByExtension(
-          g.members.map((m) => ({ id: m.photo_id, filename: m.current_filename })),
+          g.members.map((m) => ({
+            id: m.photo_id,
+            filename: m.current_filename,
+            width: m.width,
+            height: m.height,
+          })),
           extPriorityList
         )
       );

@@ -6,8 +6,9 @@ import { PhotoGrid } from "../../components/grid/PhotoGrid";
 import { BulkActionBar } from "../../components/BulkActionBar";
 import { RenameModal } from "../rename/RenameModal";
 import { MetadataModal } from "../metadata/MetadataModal";
-import type { FilterState } from "../../lib/types";
-import { ImagesIcon } from "../../components/ui/icons";
+import { OrganizeModal } from "../organize/OrganizeModal";
+import type { FilterState, OrganizeScope } from "../../lib/types";
+import { FolderTreeIcon, ImagesIcon } from "../../components/ui/icons";
 
 const SORTS: { value: string; label: string }[] = [
   { value: "date_taken_desc", label: "Newest taken" },
@@ -29,7 +30,13 @@ function filterTitle(f: FilterState): string {
   }
 }
 
-type ModalKind = "rename" | "metadata" | null;
+function organizeScope(f: FilterState): OrganizeScope | null {
+  if (f.kind === "all") return { kind: "all" };
+  if (f.kind === "folder") return { kind: "folder", path: f.path };
+  return null;
+}
+
+type ModalKind = "rename" | "metadata" | "organize" | null;
 
 export function LibraryView() {
   const { filter, sort, setSort, search } = useUi();
@@ -44,6 +51,7 @@ export function LibraryView() {
   );
   const total = query.data?.pages[0]?.total ?? 0;
   const selectedIds = selection.ids();
+  const scope = organizeScope(filter);
 
   return (
     <div className="flex h-full flex-col">
@@ -56,6 +64,15 @@ export function LibraryView() {
           </span>
         )}
         <div className="flex-1" />
+        {scope && (
+          <button
+            onClick={() => setModal("organize")}
+            className="hidden items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs text-slate-600 hover:bg-slate-100 sm:flex sm:text-sm dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+          >
+            <FolderTreeIcon className="text-base" />
+            Organize
+          </button>
+        )}
         {photos.length > 0 && (
           <button
             onClick={() => selection.selectExactly(photos.map((p) => p.id))}
@@ -127,6 +144,14 @@ export function LibraryView() {
         onClose={() => setModal(null)}
         photoIds={selectedIds}
       />
+      {scope && (
+        <OrganizeModal
+          open={modal === "organize"}
+          onClose={() => setModal(null)}
+          scope={scope}
+          scopeLabel={filterTitle(filter)}
+        />
+      )}
     </div>
   );
 }

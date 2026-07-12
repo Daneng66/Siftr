@@ -2,6 +2,7 @@ import fs from "node:fs";
 import fsp from "node:fs/promises";
 import path from "node:path";
 import { config } from "../config";
+import { moveFile } from "./fsmove";
 
 /**
  * A sidecar JSON file in the trash directory mapping each trashed file's name
@@ -39,18 +40,6 @@ export async function moveToTrash(absPath: string): Promise<string> {
   manifest[name] = absPath;
   await writeManifest(manifest);
   return dest;
-}
-
-/** Rename, falling back to copy + unlink when crossing devices (EXDEV). */
-async function moveFile(src: string, dest: string): Promise<void> {
-  await fsp.rename(src, dest).catch(async (err) => {
-    if ((err as NodeJS.ErrnoException).code === "EXDEV") {
-      await fsp.copyFile(src, dest);
-      await fsp.unlink(src);
-    } else {
-      throw err;
-    }
-  });
 }
 
 /**

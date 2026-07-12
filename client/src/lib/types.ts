@@ -101,6 +101,17 @@ export interface RenamePlanItem {
   conflict: string | null;
 }
 
+/** Which photos an organize run applies to — mirrors the sidebar folder filter. */
+export type OrganizeScope = { kind: "all" } | { kind: "folder"; path: string };
+
+export interface OrganizePlanItem {
+  photoId: number;
+  currentRelPath: string;
+  newRelPath: string;
+  conflict: string | null;
+  unchanged: boolean;
+}
+
 export type FilterState =
   | { kind: "all" }
   | { kind: "duplicates" }

@@ -125,3 +125,11 @@ export const MenuIcon = (p: IconProps) => (
     <path d="M4 6h16M4 12h16M4 18h16" />
   </Svg>
 );
+/** Folder hierarchy / organize action. */
+export const FolderTreeIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M4 4h5l1.5 2H20a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1H10" />
+    <path d="M4 4v15a1 1 0 0 0 1 1h4" />
+    <path d="M4 12h4.5L10 14h9a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-9" />
+  </Svg>
+);

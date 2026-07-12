@@ -118,6 +118,8 @@ export interface OrganizePlanItem {
   newRelPath: string;
   conflict: string | null;
   unchanged: boolean;
+  /** True if a `_{n}` suffix was appended to avoid clashing with another target. */
+  disambiguated: boolean;
 }
 
 export type FilterState =

@@ -40,6 +40,8 @@ interface PlanItem {
   /** Absolute destination path, or "" when the pattern resolved to an empty name. */
   absTarget: string;
   conflict: string | null;
+  /** True if a `_{n}` suffix was appended to avoid clashing with another target. */
+  disambiguated: boolean;
 }
 
 interface PublicPlanItem {
@@ -48,6 +50,7 @@ interface PublicPlanItem {
   newRelPath: string;
   conflict: string | null;
   unchanged: boolean;
+  disambiguated: boolean;
 }
 
 function toPublicItem(item: PlanItem): PublicPlanItem {
@@ -57,6 +60,7 @@ function toPublicItem(item: PlanItem): PublicPlanItem {
     newRelPath: item.newRelPath,
     conflict: item.conflict,
     unchanged: item.absTarget === item.photo.path,
+    disambiguated: item.disambiguated,
   };
 }
 
@@ -123,29 +127,66 @@ function buildOrganizePlan(
       const absTarget = newFilename
         ? path.join(config.photosDir, newRelDir, newFilename)
         : "";
-      items.push({ photo, newRelDir, newFilename, newRelPath, absTarget, conflict: null });
+      items.push({
+        photo,
+        newRelDir,
+        newFilename,
+        newRelPath,
+        absTarget,
+        conflict: null,
+        disambiguated: false,
+      });
     });
   }
 
-  const counts = new Map<string, number>();
-  for (const item of items) {
-    if (!item.absTarget) continue;
-    const key = item.absTarget.toLowerCase();
-    counts.set(key, (counts.get(key) ?? 0) + 1);
-  }
-  for (const item of items) {
+  disambiguateTargets(items);
+  return items;
+}
+
+/**
+ * Resolve naming clashes by appending `_{n}` before the extension — `photo.jpg`,
+ * `photo_1.jpg`, `photo_2.jpg`, ... — rather than blocking the whole plan.
+ * Items that already resolve to their own current path are settled first, so an
+ * unrelated photo landing on an unmoved photo's spot is the one renamed, not the
+ * other way round. A pattern that resolves to no name at all can't be disambiguated
+ * (there's nothing to suffix) and is still flagged as a conflict.
+ */
+function disambiguateTargets(items: PlanItem[]): void {
+  const claimed = new Set<string>();
+  const settledFirst = [...items].sort((a, b) => {
+    const aUnchanged = a.absTarget === a.photo.path ? 0 : 1;
+    const bUnchanged = b.absTarget === b.photo.path ? 0 : 1;
+    return aUnchanged - bUnchanged;
+  });
+
+  for (const item of settledFirst) {
     if (!item.newFilename) {
       item.conflict = "empty name";
       continue;
     }
-    const key = item.absTarget.toLowerCase();
-    if ((counts.get(key) ?? 0) > 1) {
-      item.conflict = "duplicate target path in plan";
-    } else if (item.absTarget !== item.photo.path && fs.existsSync(item.absTarget)) {
-      item.conflict = "a file already exists at the destination";
+    const ext = path.extname(item.newFilename);
+    const baseName = item.newFilename.slice(0, item.newFilename.length - ext.length);
+
+    let n = 0;
+    let candidateFilename = item.newFilename;
+    let candidateAbsTarget = item.absTarget;
+    while (
+      claimed.has(candidateAbsTarget.toLowerCase()) ||
+      (candidateAbsTarget !== item.photo.path && fs.existsSync(candidateAbsTarget))
+    ) {
+      n++;
+      candidateFilename = `${baseName}_${n}${ext}`;
+      candidateAbsTarget = path.join(config.photosDir, item.newRelDir, candidateFilename);
     }
+
+    if (n > 0) {
+      item.newFilename = candidateFilename;
+      item.newRelPath = joinRelDir(item.newRelDir, candidateFilename);
+      item.absTarget = candidateAbsTarget;
+      item.disambiguated = true;
+    }
+    claimed.add(item.absTarget.toLowerCase());
   }
-  return items;
 }
 
 /** Remove directories left empty by moves, walking up toward (but never past) the photos root. */

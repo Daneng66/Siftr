@@ -13,6 +13,8 @@ export interface PhotoRow {
   width: number | null;
   height: number | null;
   mime_type: string | null;
+  media_type: "image" | "video";
+  duration_seconds: number | null;
   exif_date_taken: string | null;
   exif_camera_make: string | null;
   exif_camera_model: string | null;
@@ -36,6 +38,8 @@ export interface PhotoUpsert {
   width: number | null;
   height: number | null;
   mime_type: string | null;
+  media_type: "image" | "video";
+  duration_seconds: number | null;
   exif_date_taken: string | null;
   exif_camera_make: string | null;
   exif_camera_model: string | null;
@@ -56,12 +60,14 @@ function getUpsertStmt(): Database.Statement {
   return (_upsertStmt ??= getDb().prepare(
     `INSERT INTO photos (
        path, original_filename, current_filename, file_hash, perceptual_hash,
-       file_size, width, height, mime_type, exif_date_taken, exif_camera_make,
+       file_size, width, height, mime_type, media_type, duration_seconds,
+       exif_date_taken, exif_camera_make,
        exif_camera_model, gps_lat, gps_lon, date_modified,
        rel_dir, mtime_ms, size_seen
      ) VALUES (
        @path, @original_filename, @current_filename, @file_hash, @perceptual_hash,
-       @file_size, @width, @height, @mime_type, @exif_date_taken, @exif_camera_make,
+       @file_size, @width, @height, @mime_type, @media_type, @duration_seconds,
+       @exif_date_taken, @exif_camera_make,
        @exif_camera_model, @gps_lat, @gps_lon, @date_modified,
        @rel_dir, @mtime_ms, @size_seen
      )
@@ -73,6 +79,8 @@ function getUpsertStmt(): Database.Statement {
        width            = excluded.width,
        height           = excluded.height,
        mime_type        = excluded.mime_type,
+       media_type       = excluded.media_type,
+       duration_seconds = excluded.duration_seconds,
        exif_date_taken  = excluded.exif_date_taken,
        exif_camera_make = excluded.exif_camera_make,
        exif_camera_model= excluded.exif_camera_model,
@@ -208,11 +216,23 @@ export function countPhotos(): number {
   }).n;
 }
 
+export function countVideos(): number {
+  return (
+    getDb()
+      .prepare(`SELECT COUNT(*) AS n FROM photos WHERE media_type = 'video'`)
+      .get() as { n: number }
+  ).n;
+}
+
 /** Photos that have not yet had thumbnails generated (lqip acts as the sentinel). */
-export function getPhotosWithoutThumbnails(): Array<{ id: number; path: string }> {
+export function getPhotosWithoutThumbnails(): Array<{
+  id: number;
+  path: string;
+  media_type: "image" | "video";
+}> {
   return getDb()
     .prepare(
-      `SELECT id, path FROM photos WHERE lqip IS NULL ORDER BY date_imported DESC, id DESC`
+      `SELECT id, path, media_type FROM photos WHERE lqip IS NULL ORDER BY date_imported DESC, id DESC`
     )
-    .all() as Array<{ id: number; path: string }>;
+    .all() as Array<{ id: number; path: string; media_type: "image" | "video" }>;
 }

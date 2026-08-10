@@ -15,6 +15,11 @@ statsRouter.get("/", (_req, res) => {
 
   const db = getDb();
   const photos = (db.prepare(`SELECT COUNT(*) AS n FROM photos`).get() as { n: number }).n;
+  const videos = (
+    db.prepare(`SELECT COUNT(*) AS n FROM photos WHERE media_type = 'video'`).get() as {
+      n: number;
+    }
+  ).n;
   const totalSize = (
     db.prepare(`SELECT COALESCE(SUM(file_size),0) AS n FROM photos`).get() as { n: number }
   ).n;
@@ -43,6 +48,7 @@ statsRouter.get("/", (_req, res) => {
 
   const data = {
     photos,
+    videos,
     totalSize,
     folders,
     duplicateCount: dup.count,

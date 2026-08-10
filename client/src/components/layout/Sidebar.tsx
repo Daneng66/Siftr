@@ -220,6 +220,7 @@ export function Sidebar() {
         </h3>
         <div className="space-y-1">
           <StatRow label="Photos" value={liveStats?.photos ?? 0} />
+          {!!liveStats?.videos && <StatRow label="Videos" value={liveStats.videos} />}
           <StatRow label="Total size" value={formatBytes(liveStats?.totalSize ?? 0)} />
           <StatRow label="Duplicates" value={liveStats?.duplicateCount ?? 0} />
           <StatRow

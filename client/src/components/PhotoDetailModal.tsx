@@ -5,7 +5,7 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { Modal, Button } from "./ui/Modal";
 import { api } from "../lib/api";
-import { formatBytes } from "../lib/format";
+import { formatBytes, formatDuration } from "../lib/format";
 import { useUi } from "../store/ui";
 import { useInvalidateLibrary } from "../hooks/queries";
 import { DownloadIcon } from "./ui/icons";
@@ -179,14 +179,30 @@ export function PhotoDetailModal() {
     >
       <div className="grid gap-5 md:grid-cols-[1.4fr_1fr]">
         <div className="flex items-center justify-center rounded-lg bg-slate-900">
-          <img
-            src={api.rawUrl(photo.id)}
-            alt={photo.current_filename}
-            className="max-h-[40vh] w-full rounded-lg object-contain sm:max-h-[60vh]"
-          />
+          {photo.media_type === "video" ? (
+            <video
+              src={api.rawUrl(photo.id)}
+              controls
+              className="max-h-[40vh] w-full rounded-lg sm:max-h-[60vh]"
+            />
+          ) : (
+            <img
+              src={api.rawUrl(photo.id)}
+              alt={photo.current_filename}
+              className="max-h-[40vh] w-full rounded-lg object-contain sm:max-h-[60vh]"
+            />
+          )}
         </div>
         <div className="space-y-3 overflow-y-auto">
           <Row label="Dimensions" value={photo.width ? `${photo.width} × ${photo.height}` : ""} />
+          {photo.media_type === "video" && (
+            <Row
+              label="Duration"
+              value={
+                photo.duration_seconds != null ? formatDuration(photo.duration_seconds) : ""
+              }
+            />
+          )}
           <Row label="File size" value={formatBytes(photo.file_size)} />
           <Row label="Type" value={photo.mime_type} />
 

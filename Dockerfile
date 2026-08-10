@@ -30,13 +30,16 @@ ENV NODE_ENV=production \
     TRASH_DIR=/data/.trash \
     EXIFTOOL_BIN=exiftool
 
-# exiftool (EXIF write-back) + libs czkawka_cli may dlopen for image formats.
+# exiftool (EXIF write-back), ffmpeg/ffprobe (video thumbnails, duration/dimension
+# probing, and czkawka's own runtime dependency for its similar-video pass) +
+# libs czkawka_cli may dlopen for image formats.
 RUN apt-get update && apt-get install -y --no-install-recommends \
       libimage-exiftool-perl \
       ca-certificates \
       wget \
       libheif1 \
       libwebp7 \
+      ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 # czkawka_cli (deduplication engine). Pin the version; the Linux CLI is a single

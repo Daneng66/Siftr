@@ -1,21 +1,25 @@
 # Siftr
 
-Sift through your photo library with smart renaming, browsing, and deduplication.
+Sift through your photo and video library with smart renaming, browsing, and
+deduplication.
 
-Siftr is a self-hosted photo manager that ships as a **single all-in-one Docker
-container** — React frontend, Node/Express API, SQLite index, and the
-`czkawka_cli` deduplication engine all bundled and served from one port.
+Siftr is a self-hosted photo (and video) manager that ships as a **single
+all-in-one Docker container** — React frontend, Node/Express API, SQLite
+index, and the `czkawka_cli` deduplication engine all bundled and served from
+one port.
 
 ## Features
 
-- **Library browser** — fast, virtualized photo grid that stays smooth at
-  1,000–10,000 photos. Hover quick-actions (download / select) and
-  corner badges (duplicate indicator, file size).
-- **Deduplication** — `czkawka_cli` finds exact (hash-based) duplicate groups.
-  Compare copies side-by-side and pick which to keep; deletions move to a
-  `.trash` you can restore from or empty at any time. (A perceptual "similar
-  images" pass is also wired up, behind `DEDUP_SIMILAR=true`; off by default
-  for now.)
+- **Library browser** — fast, virtualized grid of photos and videos that
+  stays smooth at 1,000–10,000 items. Hover quick-actions (download / select)
+  and corner badges (duplicate indicator, file size, video duration).
+- **Deduplication** — `czkawka_cli` finds exact (hash-based) duplicate groups
+  across both photos and videos. Compare copies side-by-side (videos play
+  inline) and pick which to keep; deletions move to a `.trash` you can
+  restore from or empty at any time. (Perceptual "similar images" and
+  "similar videos" passes are also wired up, behind `DEDUP_SIMILAR=true` and
+  `DEDUP_SIMILAR_VIDEO=true` respectively — the video pass needs `ffmpeg`;
+  both off by default for now.)
 - **Bulk rename** — pattern tokens (`{date:…}`, `{seq:N}`, `{original}`,
   `{camera}`, `{custom}`) with a live preview and collision detection.
 - **Organize** — Nextcloud-style folder/filename templates
@@ -41,14 +45,14 @@ docker run -p 8080:8080 -v ./data:/data siftr
 
 Then open <http://localhost:8080>.
 
-Put your photos under the mounted volume at `./data/photos` (sub-folders are
-scanned recursively) and click **Scan**. All persistent data lives under the one
-volume:
+Put your photos and videos under the mounted volume at `./data/photos`
+(sub-folders are scanned recursively) and click **Scan**. All persistent data
+lives under the one volume:
 
 ```
 data/
-  photos/       # your images (the watched library — source of truth)
-  thumbnails/   # generated WebP thumbnails
+  photos/       # your photos and videos (the watched library — source of truth)
+  thumbnails/   # generated WebP thumbnails (a poster frame, for videos)
   db/siftr.sqlite
   .trash/       # files removed via "Move to trash" (restore or empty from the UI)
 ```
@@ -82,8 +86,9 @@ manually:
 
 4. Open the WebUI on the host port from above (default **8080**) and click **Scan**.
 
-Advanced options (similar-image dedup, scan concurrency, thumbnail size, etc.)
-are exposed as template variables; see [Configuration](#configuration-environment-variables).
+Advanced options (similar-image/video dedup, scan concurrency, thumbnail size,
+etc.) are exposed as template variables; see
+[Configuration](#configuration-environment-variables).
 
 > [!NOTE]
 > The image is **`linux/amd64` only** — czkawka has no ARM build — so Siftr
@@ -95,7 +100,8 @@ A single Node.js process serves the API under `/api/*` and the built React SPA
 for everything else.
 
 - **Backend:** Express + TypeScript, `better-sqlite3` (in-process, no DB daemon),
-  `sharp` (thumbnails/dimensions), `exifr` (EXIF read), `exiftool` (EXIF write),
+  `sharp` (image thumbnails/dimensions), `ffmpeg`/`ffprobe` (video poster
+  frames/dimensions/duration), `exifr` (EXIF read), `exiftool` (EXIF write),
   `czkawka_cli` (dedup) via child process. An in-process job queue runs scans and
   dedup with progress exposed at `/api/jobs`.
 - **Frontend:** React + Vite + Tailwind, TanStack Query (server state), Zustand
@@ -112,7 +118,11 @@ Dockerfile  multi-stage build (client + server -> slim runtime)
 Requires **Node 20 or 22 LTS** (native modules `better-sqlite3`/`sharp` ship
 prebuilt binaries for LTS releases). `exiftool` and `czkawka_cli` must be on
 `PATH` for metadata-write and dedup features (or point `EXIFTOOL_BIN` /
-`CZKAWKA_BIN` at them); everything else runs without them.
+`CZKAWKA_BIN` at them); `ffmpeg`/`ffprobe` must be on `PATH` for video thumbnails/metadata and the
+similar-video dedup pass (or point `FFMPEG_BIN` / `FFPROBE_BIN` at them).
+Exact (hash-based) duplicate detection covers videos either way; only poster
+frames, dimensions/duration, and the perceptual similar-video pass need
+ffmpeg.
 
 ```bash
 npm install
@@ -137,10 +147,14 @@ npm test
 | `SCAN_ON_STARTUP` | `true` | Scan the library on boot |
 | `SCAN_CONCURRENCY` | `4` | Parallel hash/thumbnail workers |
 | `THUMB_SIZE` | `256` | Thumbnail max dimension (px) |
-| `DEDUP_SIMILAR` | `false` | Also run czkawka's perceptual near-duplicate pass |
-| `CZKAWKA_IMAGE_PRESET` | `High` | Similarity sensitivity (`Minimal`…`VeryHigh`) for the perceptual pass |
+| `DEDUP_SIMILAR` | `false` | Also run czkawka's perceptual near-duplicate image pass |
+| `CZKAWKA_IMAGE_PRESET` | `High` | Similarity sensitivity (`Minimal`…`VeryHigh`) for the perceptual image pass |
+| `DEDUP_SIMILAR_VIDEO` | `false` | Also run czkawka's perceptual near-duplicate video pass (requires `ffmpeg`) |
+| `CZKAWKA_VIDEO_TOLERANCE` | `10` | Frame-difference tolerance (`0`…`20`, lower = stricter) for the perceptual video pass |
 | `CZKAWKA_BIN` | `czkawka_cli` | Path to the dedup binary |
 | `EXIFTOOL_BIN` | `exiftool` | Path to exiftool |
+| `FFMPEG_BIN` | `ffmpeg` | Path to ffmpeg (video poster frames) |
+| `FFPROBE_BIN` | `ffprobe` | Path to ffprobe (video dimensions/duration) |
 
 ## Notes
 

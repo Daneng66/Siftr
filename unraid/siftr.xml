@@ -23,6 +23,17 @@
   <Requires/>
   <MinVer>6.9.2</MinVer>
   <Changes>
+### 2026-09-07 - v0.1.9
+- Duplicate video detection: videos are now scanned and thumbnailed alongside photos, with exact-hash dedup covering them automatically and an optional perceptual similar-video pass (Enable Similar-Video Dedup)
+- Video badge/duration on grid cards and duplicate groups, plus inline video playback in the detail view
+
+### 2026-07-14 - v0.1.8
+- Organize your library: restructure photos on disk using a template like {date:YYYY}/{date:MM}/{original}, with automatic handling of naming clashes and missing EXIF dates
+- Smarter duplicate detection: filter duplicate groups by folder, filename pattern, and file-extension priority
+- Collapsible sidebar folder tree, with subfolders included when filtering
+- Mobile support: responsive layout with a collapsible sidebar overlay
+- Faster, more reliable thumbnails: rebuilt pipeline, startup crash fix, manual regenerate option
+
 ### 2025-06-22
 - Initial Community Apps release
 - All-in-one image: React UI, Express API, SQLite, czkawka_cli, exiftool

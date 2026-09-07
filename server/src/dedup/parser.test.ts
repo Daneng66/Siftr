@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseDuplicatesJson, parseImagesJson } from "./parser";
+import { parseDuplicatesJson, parseImagesJson, parseVideosJson } from "./parser";
 
 describe("parseDuplicatesJson", () => {
   it("parses the size-keyed dup compact JSON (real czkawka 9 shape)", () => {
@@ -55,5 +55,30 @@ describe("parseImagesJson", () => {
     expect(parseImagesJson(JSON.stringify([[{ path: "/only.jpg" }]]))).toEqual(
       []
     );
+  });
+});
+
+describe("parseVideosJson", () => {
+  it("parses the flat array video JSON, same shape as images", () => {
+    const json = JSON.stringify([
+      [
+        { path: "/data/photos/clip.mp4", similarity: "Original" },
+        { path: "/data/photos/clip_copy.mov", similarity: "High" },
+      ],
+    ]);
+    const groups = parseVideosJson(json);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].members.map((m) => m.path)).toEqual([
+      "/data/photos/clip.mp4",
+      "/data/photos/clip_copy.mov",
+    ]);
+    expect(groups[0].members[1].similarity).toBe("High");
+  });
+
+  it("ignores empty results and singletons", () => {
+    expect(parseVideosJson("[]")).toEqual([]);
+    expect(
+      parseVideosJson(JSON.stringify([[{ path: "/only.mp4" }]]))
+    ).toEqual([]);
   });
 });

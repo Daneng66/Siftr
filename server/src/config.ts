@@ -51,6 +51,20 @@ export const config = {
    */
   dedupSimilarEnabled: process.env.DEDUP_SIMILAR === "true",
 
+  /**
+   * Whether to also run czkawka's similar-video (perceptual) pass, grouped
+   * alongside similar images under the "similar" kind. Requires ffmpeg on PATH
+   * (czkawka's own runtime dependency for this pass). Off by default.
+   */
+  dedupSimilarVideoEnabled: process.env.DEDUP_SIMILAR_VIDEO === "true",
+
+  /** czkawka video-similarity frame-difference tolerance (0..20, lower = stricter). */
+  czkawkaVideoTolerance: process.env.CZKAWKA_VIDEO_TOLERANCE ?? "10",
+
+  /** External binaries used to read video metadata and extract poster frames. */
+  ffmpegBin: process.env.FFMPEG_BIN ?? "ffmpeg",
+  ffprobeBin: process.env.FFPROBE_BIN ?? "ffprobe",
+
   /** How many photos to process in parallel during a scan. Defaults to half the CPU count, minimum 4. */
   scanConcurrency: Number(
     process.env.SCAN_CONCURRENCY ?? Math.max(4, Math.floor(os.cpus().length / 2))
@@ -87,4 +101,18 @@ export const IMAGE_EXTENSIONS = new Set([
   ".heic",
   ".heif",
   ".avif",
+]);
+
+export const VIDEO_EXTENSIONS = new Set([
+  ".mp4",
+  ".m4v",
+  ".mov",
+  ".avi",
+  ".mkv",
+  ".webm",
+  ".3gp",
+  ".wmv",
+  ".flv",
+  ".mpg",
+  ".mpeg",
 ]);

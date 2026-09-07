@@ -16,6 +16,8 @@ CREATE TABLE IF NOT EXISTS photos (
   width             INTEGER,
   height            INTEGER,
   mime_type         TEXT,
+  media_type        TEXT NOT NULL DEFAULT 'image' CHECK (media_type IN ('image','video')),
+  duration_seconds  REAL,
   exif_date_taken   TEXT,
   exif_camera_make  TEXT,
   exif_camera_model TEXT,

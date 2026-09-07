@@ -1,3 +1,5 @@
+export type MediaType = "image" | "video";
+
 export interface PhotoSummary {
   id: number;
   current_filename: string;
@@ -6,6 +8,8 @@ export interface PhotoSummary {
   dup_count: number;
   lqip: string | null;
   mtime_ms: number;
+  media_type: MediaType;
+  duration_seconds: number | null;
 }
 
 export interface PhotoDetail extends PhotoSummary {
@@ -36,6 +40,7 @@ export interface Folder {
 
 export interface Stats {
   photos: number;
+  videos: number;
   totalSize: number;
   folders: number;
   /** Number of duplicate groups (not the number of photos across them). */
@@ -86,6 +91,8 @@ export interface DuplicateMember {
   path: string;
   rel_dir: string;
   mtime_ms: number;
+  media_type: MediaType;
+  duration_seconds: number | null;
 }
 
 export interface DuplicateGroup {

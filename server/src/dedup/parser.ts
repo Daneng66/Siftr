@@ -6,6 +6,7 @@
  *
  *   duplicates (`dup -C`):  { "<size>": [ [ {path,size,hash,...}, ... ], ... ] }
  *   images     (`image -C`): [ [ {path,similarity,...}, ... ], ... ]
+ *   video      (`video -C`): [ [ {path,similarity,...}, ... ], ... ] (same shape as images)
  */
 export interface ParsedMember {
   path: string;
@@ -79,4 +80,9 @@ export function parseImagesJson(text: string): ParsedGroup[] {
     if (members.length >= 2) groups.push({ members });
   }
   return groups;
+}
+
+/** Parse `video -C` output: a flat array of groups, same shape as `image -C`. */
+export function parseVideosJson(text: string): ParsedGroup[] {
+  return parseImagesJson(text);
 }

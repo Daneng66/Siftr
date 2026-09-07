@@ -1,9 +1,9 @@
 import { memo } from "react";
 import type { PhotoSummary } from "../../lib/types";
 import { api } from "../../lib/api";
-import { formatBytes } from "../../lib/format";
+import { formatBytes, formatDuration } from "../../lib/format";
 import { clsx } from "clsx";
-import { CheckIcon, CopyIcon, DownloadIcon } from "../ui/icons";
+import { CheckIcon, CopyIcon, DownloadIcon, VideoIcon } from "../ui/icons";
 
 interface Props {
   photo: PhotoSummary;
@@ -62,9 +62,18 @@ function PhotoCardImpl({ photo, selected, onClick, onOpenDetail }: Props) {
         )}
       </div>
 
-      {/* File-size badge bottom-right */}
+      {/* Video play indicator, centered */}
+      {photo.media_type === "video" && (
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+          <VideoIcon className="text-4xl text-white/85 drop-shadow" />
+        </div>
+      )}
+
+      {/* File-size / duration badge bottom-right */}
       <span className="absolute bottom-1.5 right-1.5 rounded bg-black/55 px-1.5 py-0.5 text-xs font-medium text-white opacity-100 transition-opacity group-hover:opacity-0 [@media(hover:none)]:hidden">
-        {formatBytes(photo.file_size)}
+        {photo.media_type === "video" && photo.duration_seconds != null
+          ? `${formatDuration(photo.duration_seconds)} · ${formatBytes(photo.file_size)}`
+          : formatBytes(photo.file_size)}
       </span>
 
       {/* Selection checkmark — always visible on touch devices */}

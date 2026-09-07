@@ -4,14 +4,17 @@ import fsp from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
 import { config } from "../config";
-import { parseDuplicatesJson, parseImagesJson } from "./parser";
+import { parseDuplicatesJson, parseImagesJson, parseVideosJson } from "./parser";
 import { bulkUpdateFileHashes, getIndexedPaths } from "../db/photos";
 import {
-  DupKind,
   GroupMemberInput,
   replaceGroups,
 } from "../db/duplicates";
 import { jobs } from "../jobs";
+
+/** Which czkawka pass to run — distinct from the DB's `exact`/`similar` kind:
+ * similar images and similar videos both land in the DB's "similar" bucket. */
+type ScanPass = "exact" | "similarImage" | "similarVideo";
 
 /**
  * Normalize a filesystem path for matching czkawka output against indexed paths:
@@ -54,13 +57,25 @@ function run(
 }
 
 /**
- * Build czkawka args for a kind, writing compact JSON (`-C`). Verified against
- * czkawka_cli 9.0.0; `-d` directories, `-m` min size, `-s` similarity preset.
+ * Build czkawka args for a pass, writing compact JSON (`-C`). Verified against
+ * czkawka_cli 9.0.0; `-d` directories, `-m` min size, `-s`/`-t` similarity knobs.
  */
-function buildArgs(kind: DupKind, outFile: string): string[] {
-  if (kind === "exact") {
+function buildArgs(pass: ScanPass, outFile: string): string[] {
+  if (pass === "exact") {
     // `-u` keeps a prehash cache too, so partial hashes also survive between runs.
     return ["dup", "-d", config.photosDir, "-m", "1024", "-u", "-C", outFile];
+  }
+  if (pass === "similarVideo") {
+    // Requires ffmpeg on PATH — czkawka's own runtime dependency for this pass.
+    return [
+      "video",
+      "-d",
+      config.photosDir,
+      "-t",
+      config.czkawkaVideoTolerance,
+      "-C",
+      outFile,
+    ];
   }
   return [
     "image",
@@ -73,27 +88,32 @@ function buildArgs(kind: DupKind, outFile: string): string[] {
   ];
 }
 
-interface ScanKindResult {
+function parseOutput(pass: ScanPass, text: string) {
+  if (pass === "exact") return parseDuplicatesJson(text);
+  if (pass === "similarVideo") return parseVideosJson(text);
+  return parseImagesJson(text);
+}
+
+interface ScanPassResult {
   groups: GroupMemberInput[][];
-  /** path → hash pairs from czkawka output (only populated for exact kind). */
+  /** path → hash pairs from czkawka output (only populated for the exact pass). */
   pathHashes: Array<{ path: string; hash: string }>;
 }
 
-async function scanKind(kind: DupKind): Promise<ScanKindResult> {
+async function scanPass(pass: ScanPass): Promise<ScanPassResult> {
   const outFile = path.join(
     os.tmpdir(),
-    `siftr-czkawka-${kind}-${Date.now()}.json`
+    `siftr-czkawka-${pass}-${Date.now()}.json`
   );
   try {
-    await run(config.czkawkaBin, buildArgs(kind, outFile));
+    await run(config.czkawkaBin, buildArgs(pass, outFile));
     let text = "";
     try {
       text = await fsp.readFile(outFile, "utf8");
     } catch {
       text = ""; // no results file => no duplicates found
     }
-    const parsed =
-      kind === "exact" ? parseDuplicatesJson(text) : parseImagesJson(text);
+    const parsed = parseOutput(pass, text);
 
     // Map indexed photos by a normalized path so czkawka's output matches
     // regardless of slash direction / case. czkawka lowercases Windows paths,
@@ -123,7 +143,7 @@ async function scanKind(kind: DupKind): Promise<ScanKindResult> {
           largestIdx = members.length - 1;
         }
         // Collect hashes from exact dup output to populate file_hash in DB.
-        if (kind === "exact" && m.hash) {
+        if (pass === "exact" && m.hash) {
           pathHashes.push({ path: photo.path, hash: m.hash });
         }
       }
@@ -141,38 +161,51 @@ async function scanKind(kind: DupKind): Promise<ScanKindResult> {
 
 /**
  * Run czkawka and store the results. Tracked as a `dedup` job. The exact
- * (hash-based) pass always runs; the similar-image (perceptual) pass only runs
- * when `config.dedupSimilarEnabled` is set.
+ * (hash-based) pass always runs — it isn't extension-filtered, so it already
+ * covers both photos and videos once both are indexed. The similar-image and
+ * similar-video (perceptual) passes are each independently opt-in, and their
+ * results are merged into the same "similar" group bucket.
  */
 export async function runDedup(): Promise<{ exact: number; similar: number }> {
   const job = jobs.create("dedup", "Scanning for duplicates…");
   try {
-    const steps = config.dedupSimilarEnabled ? 2 : 1;
+    const passes: ScanPass[] = ["exact"];
+    if (config.dedupSimilarEnabled) passes.push("similarImage");
+    if (config.dedupSimilarVideoEnabled) passes.push("similarVideo");
+    const steps = passes.length;
     jobs.update(job.id, {
       total: steps,
       progress: 0,
       message: "Exact duplicates…",
     });
-    const { groups: exactGroups, pathHashes } = await scanKind("exact");
+
+    const { groups: exactGroups, pathHashes } = await scanPass("exact");
     const exact = replaceGroups("exact", exactGroups);
     // Persist the hashes czkawka computed so scan no longer needs sha256File.
     bulkUpdateFileHashes(pathHashes);
 
-    let similar = 0;
+    const similarGroups: GroupMemberInput[][] = [];
+    let step = 1;
     if (config.dedupSimilarEnabled) {
-      jobs.update(job.id, { progress: 1, message: "Similar images…" });
-      const { groups: similarGroups } = await scanKind("similar");
-      similar = replaceGroups("similar", similarGroups);
-    } else {
-      // Clear any stale similar groups from a previous run.
-      replaceGroups("similar", []);
+      jobs.update(job.id, { progress: step++, message: "Similar images…" });
+      const { groups } = await scanPass("similarImage");
+      similarGroups.push(...groups);
     }
+    if (config.dedupSimilarVideoEnabled) {
+      jobs.update(job.id, { progress: step++, message: "Similar videos…" });
+      const { groups } = await scanPass("similarVideo");
+      similarGroups.push(...groups);
+    }
+    // Replace unconditionally: clears stale groups from a previous run even
+    // when neither similar pass is enabled this time.
+    const similar = replaceGroups("similar", similarGroups);
 
     jobs.update(job.id, {
       progress: steps,
-      message: config.dedupSimilarEnabled
-        ? `Found ${exact} exact and ${similar} similar groups`
-        : `Found ${exact} exact duplicate group${exact === 1 ? "" : "s"}`,
+      message:
+        config.dedupSimilarEnabled || config.dedupSimilarVideoEnabled
+          ? `Found ${exact} exact and ${similar} similar groups`
+          : `Found ${exact} exact duplicate group${exact === 1 ? "" : "s"}`,
     });
     jobs.finish(job.id, "dedup");
     return { exact, similar };

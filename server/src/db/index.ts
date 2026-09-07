@@ -62,6 +62,19 @@ function migrate(db: Database.Database): void {
   db.exec(
     `CREATE INDEX IF NOT EXISTS idx_photos_lqip_null ON photos(id) WHERE lqip IS NULL`
   );
+
+  // Video support: media_type distinguishes photos from videos in the same
+  // index; duration_seconds is video-only metadata. Existing rows default to
+  // 'image', which is correct — they were all indexed before videos existed.
+  if (!columnExists(db, "photos", "media_type")) {
+    db.exec(
+      `ALTER TABLE photos ADD COLUMN media_type TEXT NOT NULL DEFAULT 'image' CHECK (media_type IN ('image','video'))`
+    );
+  }
+  if (!columnExists(db, "photos", "duration_seconds")) {
+    db.exec(`ALTER TABLE photos ADD COLUMN duration_seconds REAL`);
+  }
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_photos_media_type ON photos(media_type)`);
 }
 
 /** Open (once) the SQLite database and apply the schema. */

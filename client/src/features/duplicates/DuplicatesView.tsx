@@ -7,8 +7,8 @@ import {
 } from "../../hooks/queries";
 import { useUi } from "../../store/ui";
 import { Button, Modal } from "../../components/ui/Modal";
-import { formatBytes } from "../../lib/format";
-import { CheckIcon, CopyIcon, InfoIcon, ScanIcon, SpinnerIcon, StarIcon, TrashIcon, XIcon } from "../../components/ui/icons";
+import { formatBytes, formatDuration } from "../../lib/format";
+import { CheckIcon, CopyIcon, InfoIcon, ScanIcon, SpinnerIcon, StarIcon, TrashIcon, VideoIcon, XIcon } from "../../components/ui/icons";
 import type { DuplicateGroup, DupStatus } from "../../lib/types";
 import { findPatternMatches } from "../../lib/namePattern";
 import { parseExtensionPriority, pickPreferredByExtension } from "../../lib/extensionPriority";
@@ -167,6 +167,11 @@ function GroupCard({
                     {m.similarity}
                   </span>
                 )}
+                {m.media_type === "video" && (
+                  <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                    <VideoIcon className="text-3xl text-white/85 drop-shadow" />
+                  </div>
+                )}
               </div>
               <div className="p-2">
                 <p className="truncate text-xs font-medium" title={m.path}>
@@ -182,7 +187,11 @@ function GroupCard({
                 </p>
                 <p className="text-xs text-slate-400">
                   {formatBytes(m.file_size)}
-                  {m.width ? ` · ${m.width}×${m.height}` : ""}
+                  {m.media_type === "video" && m.duration_seconds != null
+                    ? ` · ${formatDuration(m.duration_seconds)}`
+                    : m.width
+                      ? ` · ${m.width}×${m.height}`
+                      : ""}
                 </p>
                 <div className="mt-2 flex gap-1.5">
                   <button
@@ -369,9 +378,9 @@ export function DuplicatesView() {
       <div className="mb-5">
         <h1 className="text-xl font-bold">Duplicates</h1>
         <p className="text-sm text-slate-500">
-          Exact (hash-based) duplicate groups found by czkawka. Pick which copy
-          to keep. Scans run with the main library scan, or on demand from the
-          Scan menu.
+          Exact (hash-based) duplicate groups of photos and videos found by
+          czkawka. Pick which copy to keep. Scans run with the main library
+          scan, or on demand from the Scan menu.
         </p>
       </div>
 
@@ -532,7 +541,8 @@ export function DuplicatesView() {
           <CopyIcon className="mx-auto mb-2 text-3xl text-slate-300" />
           <p className="font-medium">No duplicate groups</p>
           <p className="text-sm text-slate-500">
-            Run a duplicate scan to find exact (hash-based) duplicate photos.
+            Run a duplicate scan to find exact (hash-based) duplicate photos
+            and videos.
           </p>
         </div>
       ) : groups.length === 0 ? (

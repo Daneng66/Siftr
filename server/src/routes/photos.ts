@@ -77,7 +77,7 @@ photosRouter.get("/", (req, res) => {
   const items = db
     .prepare(
       `SELECT p.id, p.current_filename, p.file_size, p.rel_dir,
-              p.lqip, p.mtime_ms,
+              p.lqip, p.mtime_ms, p.media_type, p.duration_seconds,
               COUNT(dm.photo_id) AS dup_count
          FROM photos p
          LEFT JOIN duplicate_group_members dm ON dm.photo_id = p.id
@@ -108,7 +108,9 @@ photosRouter.get("/:id/thumb", async (req, res) => {
   if (!thumbnailExists(id)) {
     let gen = thumbInFlight.get(id);
     if (!gen) {
-      gen = makeThumbnails(photo.path, id).finally(() => thumbInFlight.delete(id));
+      gen = makeThumbnails(photo.path, id, photo.media_type).finally(() =>
+        thumbInFlight.delete(id)
+      );
       thumbInFlight.set(id, gen);
     }
     const { lqip } = await gen;

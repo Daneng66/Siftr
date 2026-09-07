@@ -2,10 +2,11 @@ import fs from "node:fs";
 import fsp from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
-import { config, IMAGE_EXTENSIONS } from "../config";
+import { config, IMAGE_EXTENSIONS, VIDEO_EXTENSIONS } from "../config";
 import { mapLimit } from "../util/concurrency";
 import { relDir } from "../util/relpath";
 import { readExif } from "./exif";
+import { readVideoMetadata } from "./video";
 import { clearThumbnails, deleteThumbnail, makeThumbnails } from "./thumbnails";
 import {
   batchDeletePhotos,
@@ -32,9 +33,20 @@ const MIME_BY_EXT: Record<string, string> = {
   ".heic": "image/heic",
   ".heif": "image/heif",
   ".avif": "image/avif",
+  ".mp4": "video/mp4",
+  ".m4v": "video/x-m4v",
+  ".mov": "video/quicktime",
+  ".avi": "video/x-msvideo",
+  ".mkv": "video/x-matroska",
+  ".webm": "video/webm",
+  ".3gp": "video/3gpp",
+  ".wmv": "video/x-ms-wmv",
+  ".flv": "video/x-flv",
+  ".mpg": "video/mpeg",
+  ".mpeg": "video/mpeg",
 };
 
-/** Recursively collect image file paths under a directory. */
+/** Recursively collect image and video file paths under a directory. */
 async function walk(dir: string): Promise<string[]> {
   const out: string[] = [];
   async function recurse(current: string) {
@@ -52,7 +64,7 @@ async function walk(dir: string): Promise<string[]> {
         await recurse(full);
       } else if (entry.isFile()) {
         const ext = path.extname(entry.name).toLowerCase();
-        if (IMAGE_EXTENSIONS.has(ext)) out.push(full);
+        if (IMAGE_EXTENSIONS.has(ext) || VIDEO_EXTENSIONS.has(ext)) out.push(full);
       }
     }
   }
@@ -62,20 +74,32 @@ async function walk(dir: string): Promise<string[]> {
 
 async function indexFile(filePath: string, stat: fs.Stats): Promise<void> {
   const ext = path.extname(filePath).toLowerCase();
+  const mediaType: "image" | "video" = VIDEO_EXTENSIONS.has(ext) ? "video" : "image";
 
   let width: number | null = null;
   let height: number | null = null;
-  try {
-    const meta = await sharp(filePath, { failOn: "none" }).metadata();
-    width = meta.width ?? null;
-    height = meta.height ?? null;
-    if (meta.orientation && meta.orientation >= 5 && width && height) {
-      [width, height] = [height, width];
+  let durationSeconds: number | null = null;
+
+  if (mediaType === "video") {
+    const meta = await readVideoMetadata(filePath);
+    width = meta.width;
+    height = meta.height;
+    durationSeconds = meta.durationSeconds;
+  } else {
+    try {
+      const meta = await sharp(filePath, { failOn: "none" }).metadata();
+      width = meta.width ?? null;
+      height = meta.height ?? null;
+      if (meta.orientation && meta.orientation >= 5 && width && height) {
+        [width, height] = [height, width];
+      }
+    } catch {
+      /* unreadable image — still index basic info */
     }
-  } catch {
-    /* unreadable image — still index basic info */
   }
 
+  // exifr also reads QuickTime/MP4 creation-date and GPS tags when present;
+  // harmless (and just leaves nulls) for containers it doesn't understand.
   const exif = await readExif(filePath);
   const filename = path.basename(filePath);
 
@@ -92,6 +116,8 @@ async function indexFile(filePath: string, stat: fs.Stats): Promise<void> {
     width,
     height,
     mime_type: MIME_BY_EXT[ext] ?? null,
+    media_type: mediaType,
+    duration_seconds: durationSeconds,
     exif_date_taken: exif.dateTaken,
     exif_camera_make: exif.cameraMake,
     exif_camera_model: exif.cameraModel,
@@ -241,8 +267,8 @@ export async function runThumbnailJob(regenerate = false): Promise<void> {
   try {
     for (let i = 0; i < photos.length; i += SCAN_BATCH_SIZE) {
       const chunk = photos.slice(i, i + SCAN_BATCH_SIZE);
-      await mapLimit(chunk, config.scanConcurrency, async ({ id, path }) => {
-        const { lqip } = await makeThumbnails(path, id);
+      await mapLimit(chunk, config.scanConcurrency, async ({ id, path, media_type }) => {
+        const { lqip } = await makeThumbnails(path, id, media_type);
         updateLqip(id, lqip);
         done++;
       });

@@ -125,6 +125,13 @@ export const MenuIcon = (p: IconProps) => (
     <path d="M4 6h16M4 12h16M4 18h16" />
   </Svg>
 );
+/** Video / play indicator. */
+export const VideoIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="m10 8 6 4-6 4Z" />
+    <circle cx="12" cy="12" r="9" />
+  </Svg>
+);
 /** Folder hierarchy / organize action. */
 export const FolderTreeIcon = (p: IconProps) => (
   <Svg {...p}>

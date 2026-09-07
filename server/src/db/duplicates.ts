@@ -56,6 +56,8 @@ export interface DuplicateMemberView {
   path: string;
   rel_dir: string;
   mtime_ms: number;
+  media_type: "image" | "video";
+  duration_seconds: number | null;
 }
 
 /** All duplicate groups with their member photo summaries, for the compare UI. */
@@ -67,7 +69,7 @@ export function listGroups(kind?: DupKind) {
            dg.kind, dg.created_at,
            dm.photo_id, dm.status, dm.similarity,
            p.current_filename, p.file_size, p.width, p.height,
-           p.path, p.rel_dir, p.mtime_ms
+           p.path, p.rel_dir, p.mtime_ms, p.media_type, p.duration_seconds
       FROM duplicate_groups dg
       JOIN duplicate_group_members dm ON dm.group_id = dg.id
       JOIN photos p ON p.id = dm.photo_id
@@ -104,6 +106,8 @@ export function listGroups(kind?: DupKind) {
       path: row.path,
       rel_dir: row.rel_dir,
       mtime_ms: row.mtime_ms,
+      media_type: row.media_type,
+      duration_seconds: row.duration_seconds,
     });
   }
   return [...groupMap.values()];

@@ -4,6 +4,7 @@ import { runThumbnailJob, scanLibrary } from "../scanner";
 import { runDedup } from "../dedup/czkawka";
 import { clearAllLqip } from "../db/photos";
 import { clearThumbnails } from "../scanner/thumbnails";
+import { z } from "zod";
 
 export const jobsRouter = Router();
 
@@ -48,9 +49,21 @@ scanRouter.post("/", (req, res) => {
   if (jobs.isRunning("scan")) {
     return res.status(409).json({ error: "scan already running" });
   }
-  const hard = (req.body as { hard?: unknown } | undefined)?.hard === true;
+  const body = z
+    .object({ hard: z.boolean().optional(), scope: z.string().min(1).optional() })
+    .safeParse(req.body ?? {});
+  if (!body.success) return res.status(400).json({ error: "invalid scan request" });
+  const { hard = false, scope } = body.data;
+  if (
+    scope &&
+    (scope.startsWith("/") ||
+      scope.includes("\\") ||
+      scope.split("/").some((part) => !part || part === "." || part === ".."))
+  ) {
+    return res.status(400).json({ error: "invalid scan directory" });
+  }
   // Fire and forget; progress for all passes is tracked via the jobs table.
-  scanLibrary(hard ? "hard" : "soft")
+  scanLibrary(hard || scope ? "hard" : "soft", scope)
     .then((result) => {
       const changed = result.added + result.updated + result.removed > 0;
       if (changed && !jobs.isRunning("dedup"))

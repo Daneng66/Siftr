@@ -62,10 +62,10 @@ export const api = {
 
   stats: () => request<Stats>("/api/stats"),
   jobs: () => request<JobsResponse>("/api/jobs"),
-  startScan: (hard = false) =>
+  startScan: (hard = false, scope?: string) =>
     request<{ started: boolean }>("/api/scan", {
       method: "POST",
-      body: JSON.stringify({ hard }),
+      body: JSON.stringify({ hard, ...(scope ? { scope } : {}) }),
     }),
   regenerateThumbnails: () =>
     request<{ started: boolean }>("/api/scan/thumbnails", { method: "POST" }),

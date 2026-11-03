@@ -164,22 +164,72 @@ export type ScanMode = "soft" | "hard";
  * thumbnailed and upserted; vanished files are pruned. Tracked as a `scan` job.
  * A hard scan first clears all indexed data and thumbnails, then regenerates.
  */
-export async function scanLibrary(mode: ScanMode = "soft"): Promise<ScanResult> {
+export async function scanLibrary(
+  mode: ScanMode = "soft",
+  scope?: string
+): Promise<ScanResult> {
   const hard = mode === "hard";
+  const scopedRoot = scope
+    ? path.resolve(config.photosDir, ...scope.split("/"))
+    : config.photosDir;
+  const relativeScope = path.relative(config.photosDir, scopedRoot);
   const job = jobs.create(
     "scan",
-    hard ? "Hard scan: clearing data…" : "Scanning library…",
-    { hard }
+    scope
+      ? `Rescanning ${scope}…`
+      : hard
+        ? "Hard scan: clearing data…"
+        : "Scanning library…",
+    { hard: hard && !scope }
   );
   const result: ScanResult = { scanned: 0, added: 0, updated: 0, removed: 0 };
   const startMs = Date.now();
   try {
-    if (hard) {
+    if (
+      scope !== undefined &&
+      (!scope ||
+        path.isAbsolute(scope) ||
+        relativeScope === ".." ||
+        relativeScope.startsWith(`..${path.sep}`))
+    ) {
+      throw new Error("Invalid scan directory");
+    }
+    if (scope) {
+      const [rootRealPath, scopeRealPath] = await Promise.all([
+        fsp.realpath(config.photosDir),
+        fsp.realpath(scopedRoot).catch(() => null),
+      ]);
+      const realRelative = scopeRealPath ? path.relative(rootRealPath, scopeRealPath) : "..";
+      const stat = scopeRealPath ? await fsp.stat(scopeRealPath).catch(() => null) : null;
+      if (
+        !stat?.isDirectory() ||
+        realRelative === ".." ||
+        realRelative.startsWith(`..${path.sep}`) ||
+        path.isAbsolute(realRelative)
+      ) {
+        throw new Error("Scan directory does not exist inside the photos directory");
+      }
+    }
+    if (hard && !scope) {
       clearLibrary();
       await clearThumbnails();
     }
-    const files = await walk(config.photosDir);
-    const existing = getIndexedPaths();
+    const files = await walk(scopedRoot);
+    const allExisting = getIndexedPaths();
+    const existing = scope
+      ? new Map([...allExisting].filter(([filePath]) => {
+          const dir = relDir(filePath);
+          return dir === scope || dir.startsWith(`${scope}/`);
+        }))
+      : allExisting;
+    if (hard && scope) {
+      await Promise.all(
+        [...existing.values()].map(async ({ id }) => {
+          updateLqip(id, null);
+          await deleteThumbnail(id);
+        })
+      );
+    }
     const seen = new Set<string>();
     let processed = 0;
     jobs.update(job.id, { total: files.length, message: "Indexing photos…" });
@@ -198,6 +248,7 @@ export async function scanLibrary(mode: ScanMode = "soft"): Promise<ScanResult> 
             const stat = await fsp.stat(file);
             const prev = existing.get(file);
             const unchanged =
+              !hard &&
               prev &&
               prev.mtime_ms === Math.floor(stat.mtimeMs) &&
               prev.size_seen === stat.size;

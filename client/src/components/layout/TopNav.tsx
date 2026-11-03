@@ -186,6 +186,13 @@ export function TopNav() {
   const dedupRunning = jobsData?.dedupRunning ?? false;
   const thumbRunning = jobsData?.thumbRunning ?? false;
   const hardScanRunning = jobsData?.hardScanRunning ?? false;
+  const scanJob = scanRunning
+    ? jobsData?.jobs.find((job) => job.type === "scan" && job.status === "running")
+    : undefined;
+  const scanPercent =
+    scanJob && scanJob.total > 0
+      ? Math.min(100, Math.round((scanJob.progress / scanJob.total) * 100))
+      : 0;
   const activeJob =
     (scanRunning || dedupRunning || thumbRunning)
       ? jobsData?.jobs.find((j) => j.status === "running")
@@ -246,6 +253,7 @@ export function TopNav() {
   }, [searchInput, setSearch]);
 
   return (
+    <>
     <header className="z-20 flex h-14 shrink-0 items-center gap-4 border-b border-slate-200 bg-white px-4 dark:border-slate-800 dark:bg-slate-900">
       <button
         onClick={toggleSidebar}
@@ -476,5 +484,37 @@ export function TopNav() {
         </div>
       )}
     </header>
+    {scanJob && (
+      <div
+        role="status"
+        aria-live="polite"
+        className="shrink-0 border-b border-brand-200 bg-brand-50 px-4 py-2.5 text-brand-900 dark:border-brand-900/60 dark:bg-brand-950/50 dark:text-brand-100"
+      >
+        <div className="mb-1.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs sm:text-sm">
+          <span className="font-medium">{scanJob.message || "Scanning library…"}</span>
+          {scanJob.total > 0 ? (
+            <span className="tabular-nums text-brand-700 dark:text-brand-200">
+              {scanJob.progress.toLocaleString()} / {scanJob.total.toLocaleString()} files · {scanPercent}%
+            </span>
+          ) : (
+            <span className="text-brand-700 dark:text-brand-200">Preparing…</span>
+          )}
+        </div>
+        <div
+          role="progressbar"
+          aria-label="Library scan progress"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={scanPercent}
+          className="h-1.5 overflow-hidden rounded-full bg-brand-200 dark:bg-brand-900"
+        >
+          <div
+            className="h-full rounded-full bg-brand-600 transition-[width] duration-300 dark:bg-brand-400"
+            style={{ width: `${scanPercent}%` }}
+          />
+        </div>
+      </div>
+    )}
+    </>
   );
 }

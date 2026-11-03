@@ -174,7 +174,10 @@ function GroupCard({
                 )}
               </div>
               <div className="p-2">
-                <p className="truncate text-xs font-medium" title={m.path}>
+                <p
+                  className="break-all text-xs font-medium"
+                  title={m.current_filename}
+                >
                   {m.current_filename}
                   {nameMatches?.has(m.photo_id) && (
                     <span
@@ -184,6 +187,12 @@ function GroupCard({
                       name match
                     </span>
                   )}
+                </p>
+                <p
+                  className="mt-1 break-all text-[11px] leading-4 text-slate-500 dark:text-slate-400"
+                  title={m.path}
+                >
+                  {m.rel_dir || "Library root"}
                 </p>
                 <p className="text-xs text-slate-400">
                   {formatBytes(m.file_size)}
@@ -222,7 +231,9 @@ export function DuplicatesView() {
   const invalidate = useInvalidateLibrary();
   const { data: jobsData } = useJobsSnapshot();
   const dedupRunning = jobsData?.dedupRunning ?? false;
+  const scanRunning = jobsData?.scanRunning ?? false;
   const hardScanRunning = jobsData?.hardScanRunning ?? false;
+  const [showRescanConfirm, setShowRescanConfirm] = useState(false);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   // Which deletion is in flight, so the matching button shows a spinner.
@@ -289,7 +300,9 @@ export function DuplicatesView() {
   }, [allGroups, extPriorityList]);
 
   const groups = allGroups.filter((g) => {
-    if (activeFolder && !g.members.some((m) => m.rel_dir === activeFolder.path)) return false;
+    if (activeFolder && !g.members.some((m) =>
+      m.rel_dir === activeFolder.path || m.rel_dir.startsWith(`${activeFolder.path}/`)
+    )) return false;
     if (nameFilterOn && (nameMatchesByGroup.get(g.id)?.size ?? 0) === 0) return false;
     return true;
   });
@@ -375,13 +388,25 @@ export function DuplicatesView() {
 
   return (
     <div className="scroll-area h-full overflow-y-auto p-3 sm:p-5">
-      <div className="mb-5">
-        <h1 className="text-xl font-bold">Duplicates</h1>
-        <p className="text-sm text-slate-500">
-          Exact (hash-based) duplicate groups of photos and videos found by
-          czkawka. Pick which copy to keep. Scans run with the main library
-          scan, or on demand from the Scan menu.
-        </p>
+      <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-bold">Duplicates</h1>
+          <p className="text-sm text-slate-500">
+            Exact (hash-based) duplicate groups of photos and videos found by
+            czkawka. Pick which copy to keep. Scans run with the main library
+            scan, or on demand from the Scan menu.
+          </p>
+        </div>
+        {activeFolder && (
+          <Button
+            variant="default"
+            disabled={scanRunning || dedupRunning}
+            onClick={() => setShowRescanConfirm(true)}
+          >
+            {scanRunning || dedupRunning ? <SpinnerIcon className="animate-spin" /> : <ScanIcon />}
+            {scanRunning || dedupRunning ? "Rescanning…" : "Rescan directory"}
+          </Button>
+        )}
       </div>
 
       {/* Targeted-dedup filters — restrict/steer which groups are shown/acted on.
@@ -644,6 +669,32 @@ export function DuplicatesView() {
             </div>
           ))}
         </div>
+      </Modal>
+
+      <Modal
+        open={showRescanConfirm}
+        onClose={() => setShowRescanConfirm(false)}
+        title={`Rescan ${activeFolder?.name ?? "directory"}?`}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setShowRescanConfirm(false)}>Cancel</Button>
+            <Button
+              variant="primary"
+              disabled={!activeFolder || scanRunning || dedupRunning}
+              onClick={() => {
+                if (!activeFolder) return;
+                setShowRescanConfirm(false);
+                api.startScan(false, activeFolder.path).catch(() => {});
+              }}
+            >
+              Rescan directory
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-slate-600 dark:text-slate-300">
+          Re-index all photos and videos in <strong>{activeFolder?.path}</strong> and its subfolders, then refresh duplicate groups across the library. Other directories will not be re-indexed.
+        </p>
       </Modal>
 
       {/* Filter logic explainer */}
